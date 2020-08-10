@@ -1,0 +1,532 @@
+---
+- name: "LOW | TCAT-AS-000010 | PATCH | The number of allowed simultaneous sessions to the manager application must be limited."
+  xml:
+      path: "{{ catalina_home_dir }}/webapps/manager/META-INF/context.xml"
+      xpath: //Manager
+      attribute: maxActiveSessions
+      value: "{{ tcat_max_active_sessions }}"
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000010
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000010
+      - patch
+
+- name: "LOW | TCAT-AS-000030 | PATCH | HTTP Strict Transport Security (HSTS) must be enabled."
+  block:
+      - name: "LOW | TCAT-AS-000030 | AUDIT | HTTP Strict Transport Security (HSTS) must be enabled. | Check if httpHeaderSecurity uncommented"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:filter[x:filter-name="httpHeaderSecurity"]
+            count: yes
+        register: tcat_000030_httpheadsecurity_enabled
+
+      - name: "LOW | TCAT-AS-000030 | PATCH | HTTP Strict Transport Security (HSTS) must be enabled. | Insert httpHeaderSecurity filter"
+        blockinfile:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            marker: "<!-- {httpHeaderSecurity} ANSIBLE MANAGED BLOCK -->"
+            block: |2
+                <filter>
+                  <filter-name>httpHeaderSecurity</filter-name>
+                  <filter-class>org.apache.catalina.filters.HttpHeaderSecurityFilter</filter-class>
+                  <async-supported>true</async-supported>
+                  <init-param>
+                    <param-name>hstsEnabled</param-name>
+                    <param-value>true</param-value>
+                  </init-param>
+                </filter>
+            insertbefore: '<!-- A filter that sets character encoding that is used to decode -->'
+        notify: restart tomcat
+        when: tcat_000030_httpheadsecurity_enabled.count == 0
+
+      - name: "LOW | TCAT-AS-000030 | AUDIT | HTTP Strict Transport Security (HSTS) must be enabled. | Check for hstsEnabled"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:filter[x:filter-name="httpHeaderSecurity"]/x:init-param[x:param-name="hstsEnabled"]
+            count: yes
+        register: tcat_000030_hstsEnabled_enabled
+        when: tcat_000030_httpheadsecurity_enabled.count > 0
+
+      - name: "LOW | TCAT-AS-000030 | PATCH | HTTP Strict Transport Security (HSTS) must be enabled. | force Set hstsEnabled"
+        replace:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            regexp: '<init-param>\n      <param-name>hstsEnabled</param-name>\n      <param-value>false</param-value>'
+            replace: '<init-param>\n      <param-name>hstsEnabled</param-name>\n      <param-value>true</param-value>'
+        notify: restart tomcat
+        when: tcat_000030_httpheadsecurity_enabled.count > 0 and tcat_000030_hstsEnabled_enabled.count > 0
+
+      - name: "LOW | TCAT-AS-000030 | PATCH | HTTP Strict Transport Security (HSTS) must be enabled. | Insert hstsEnabled if not configured"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:filter[x:filter-name="httpHeaderSecurity"]
+            pretty_print: yes
+            add_children:
+            - init-param:
+                _:
+                  - param-name: "hstsEnabled"
+                  - param-value: "true"
+        notify: restart tomcat
+        when: tcat_000030_httpheadsecurity_enabled.count > 0 and tcat_000030_hstsEnabled_enabled.count == 0
+  when:
+      - TCAT_AS_000030
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000030
+      - patch
+
+- name: |
+        "LOW | TCAT-AS-000140 | PATCH | AccessLogValve must be configured for each application context."
+        "LOW | TCAT-AS-000260 | PATCH | HTTP status code must be logged."
+        "LOW | TCAT-AS-001080 | PATCH | Application user name must be logged."
+  block:
+      - name: |
+              "LOW | TCAT-AS-000140 | AUDIT | AccessLogValve must be configured for each application context. | Find hosts"
+              "LOW | TCAT-AS-000260 | AUDIT | HTTP status code must be logged. | Find hosts"
+              "LOW | TCAT-AS-001080 | AUDIT | Application user name must be logged. | Find hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine//Host
+            content: attribute
+        register: tcat_000140_host_name_values
+
+      - name: |
+              "LOW | TCAT-AS-000140 | PATCH | AccessLogValve must be configured for each application context. | Set AccessLogValve to hosts"
+              "LOW | TCAT-AS-000260 | PATCH | HTTP status code must be logged. | Set AccessLogValve to hosts"
+              "LOW | TCAT-AS-001080 | PATCH | Application user name must be logged. | Set AccessLogValve to hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='{{ item[0].Host.name }}']/Valve
+            attribute: "{{ item[1].attribute }}"
+            value: "{{ item[1].value }}"
+            pretty_print: yes
+        with_nested:
+            - "{{ tcat_000140_host_name_values.matches }}"
+            - "{{ tcat_big_access_log_valve }}"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000140
+      - TCAT_AS_000260
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000140
+      - TCAT-AS-000260
+      - patch
+
+- name: "LOW | TCAT-AS-000480 | PATCH | Diagnostic tracing must be disabled."
+  block:
+      - name: "LOW | TCAT-AS-000480 | AUDIT | Diagnostic tracing must be disabled. | Get Web App folders"
+        command: ls /opt/tomcat/webapps
+        changed_when: false
+        failed_when: false
+        register: tcat_000480_webapp_list
+
+      - name: "LOW | TCAT-AS-000480 | PATCH | Diagnostic tracing must be disabled. | Remove allowTrace from server.xml"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Connector
+            attribute: allowTrace
+            value: "false"
+            pretty_print: yes
+        notify: restart tomcat
+
+      - name: "LOW | TCAT-AS-000480 | PATCH | Diagnostic tracing must be disabled. | Remove TRACE from web apps web.xml"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/{{ item }}/WEB-INF/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+                z: http://xmlns.jcp.org/xml/ns/javaee
+            xpath: //x:web-resource-collection/x:http-method[text()="TRACE"]
+            pretty_print: yes
+            state: absent
+        with_items:
+            - "{{ tcat_000480_webapp_list.stdout_lines }}"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000480
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000480
+      - patch
+
+- name: "LOW | TCAT-AS-000510 | PATCH | DefaultServlet debug parameter must be disabled."
+  replace:
+      path: "{{ catalina_home_dir }}/conf/web.xml"
+      regexp: '      <param-name>debug</param-name>\n      <param-value>.*'
+      replace: '      <param-name>debug</param-name>\n      <param-value>0</param-value>'
+  failed_when: false
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000510
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000510
+      - patch
+
+- name: "LOW | TCAT-AS-000520 | PATCH | DefaultServlet directory listings parameter must be disabled."
+  replace:
+      path: "{{ catalina_home_dir }}/conf/web.xml"
+      regexp: '      <param-name>listings</param-name>\n      <param-value>.*'
+      replace: '      <param-name>listings</param-name>\n      <param-value>false</param-value>'
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000520
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000520
+      - patch
+
+- name: "LOW | TCAT-AS-000550 | PATCH | The xpoweredBy attribute must be disabled."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Connector
+      attribute: xpoweredBy
+      value: "false"
+      pretty_print: yes
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000550
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000550
+      - patch
+
+- name: "LOW | TCAT-AS-000560 | PATCH | Example applications must be removed."
+  file:
+      path: "{{ catalina_home_dir }}/webapps/examples"
+      state: absent
+  when:
+      - TCAT_AS_000560
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000560
+      - patch
+
+- name: "LOW | TCAT-AS-000570 | AUDIT | Tomcat default ROOT web application must be removed."
+  block:
+      - name: "LOW | TCAT-AS-000570 | AUDIT | Tomcat default ROOT web application must be removed. | check for default configs"
+        command: cat {{ catalina_home_dir }}/webapps/ROOT/index.jsp
+        changed_when: false
+        failed_when: false
+        register: tcat_000570_default_root_page
+
+      - name: "LOW | TCAT-AS-000570 | AUDIT | Tomcat default ROOT web application must be removed. | Display alert about default configs"
+        debug:
+            msg:
+                - "Alert! Your ROOT web app configuration looks to be the default from Apache"
+                - "Please review the files in $CATALINA_HOME/webapps/ROOT and if the app is not custom"
+                - "please remove all files from the $CATALINA_HOME/webapps/ROOT directory"
+        when: "'Licensed to the Apache Software Foundation (ASF)' in tcat_000570_default_root_page.stdout"
+
+      - name: "LOW | TCAT-AS-000570 | AUDIT | Tomcat default ROOT web application must be removed. | Display warning about default configs"
+        debug:
+            msg:
+                - "Good News! It looks like your ROOT webapps does not exist or is not the default configuration"
+                - "Please check $CATALINA_HOME/webapps/ROOT to confirm"
+        when: "'Licensed to the Apache Software Foundation (ASF)' not in tcat_000570_default_root_page.stdout"
+  when:
+      - TCAT_AS_000570
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000570
+      - audit
+
+- name: "LOW | TCAT-AS-000580 | PATCH | Documentation must be removed."
+  file:
+      path: "{{ catalina_home_dir }}/webapps/docs"
+      state: absent
+  when:
+      - TCAT_AS_000580
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000580
+      - patch
+
+- name: "LOW | TCAT-AS-000810 | PATCH | Idle timeout for management application must be set to 10 minutes."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/web.xml"
+      namespaces:
+          x: http://xmlns.jcp.org/xml/ns/javaee
+          y: http://www.w3.org/2001/XMLSchema-instance
+          z: http://xmlns.jcp.org/xml/ns/javaee
+      xpath: //x:session-config
+      pretty_print: yes
+      set_children:
+          - session-timeout: "10"
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000810
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000810
+      - patch
+
+- name: |
+        "LOW | TCAT-AS-000820 | PATCH | Tomcat must be configured to generate session IDs using a FIPS 140-2 approved random number generator."
+        "LOW | TCAT-AS-001670 | PATCH | RECYCLE_FACADES must be set to true."
+  block:
+      - name: |
+              "LOW | TCAT-AS-000820 | AUDIT | Tomcat must be configured to generate session IDs using a FIPS 140-2 approved random number generator. | Get CATALINA_OPTS config value"
+              "LOW | TCAT-AS-001670 | AUDIT | RECYCLE_FACADES must be set to true. | Get CATALINA_OPTS config value"
+        shell: cat /etc/systemd/system/tomcat.service | grep -i CATALINA_OPTS | sed 's/.$//'
+        changed_when: false
+        failed_when: false
+        register: tcat_000820_catalina_opts
+
+      - name: |
+              "LOW | TCAT-AS-000820 | PATCH | Tomcat must be configured to generate session IDs using a FIPS 140-2 approved random number generator. | Add ENFORCE_ENCODING_IN_GET_WRITER if missing"
+              "LOW | TCAT-AS-001670 | PATCH | RECYCLE_FACADES must be set to true. | Add ENFORCE_ENCODING_IN_GET_WRITER if missing"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: "^Environment='CATALINA_OPTS=.*"
+            replace: "{{ tcat_000820_catalina_opts.stdout }} -Dorg.apache.catalina.connector.RECYCLE_FACADES=true'"
+        when: "'RECYCLE_FACADES=true' not in tcat_000820_catalina_opts.stdout"
+        notify: restart tomcat
+
+      - name: |
+              "LOW | TCAT-AS-000820 | PATCH | Tomcat must be configured to generate session IDs using a FIPS 140-2 approved random number generator. | Edit ENFORCE_ENCODING_IN_GET_WRITER if missing"
+              "LOW | TCAT-AS-001670 | PATCH | RECYCLE_FACADES must be set to true. | Edit ENFORCE_ENCODING_IN_GET_WRITER if missing"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: 'RECYCLE_FACADES=false'
+            replace: 'RECYCLE_FACADES=true'
+        when: "'RECYCLE_FACADES=false' in tcat_000820_catalina_opts.stdout"
+  when:
+      - TCAT_AS_000820
+      - TCAT_AS_001670
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000820
+      - TCAT-AS-001670
+      - patch
+
+- name: "LOW | TCAT-AS-000840 | PATCH | Secured connectors must use FIPS 140-2-validated cipher algorithms."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Listener[@className='org.apache.catalina.core.AprLifecycleListener']
+      attribute: FIPSMode
+      value: "on"
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000840
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000840
+      - patch
+
+- name: "LOW | TCAT-AS-000930 | PATCH | Default error pages for manager application must be customized."
+  template:
+      src: "{{ item.src }}"
+      dest: "{{ catalina_home_dir }}/webapps/manager/WEB-INF/jsp/{{ item.dest }}"
+      owner: tomcat
+      group: tomcat
+      mode: 0755
+  with_items:
+      - { src: 401_template.jsp.j2, dest: 401.jsp }
+      - { src: 403_template.jsp.j2, dest: 403.jsp }
+      - { src: 404_template.jsp.j2, dest: 404.jsp }
+  when:
+      - TCAT_AS_000930
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000930
+      - patch
+
+- name: "LOW | TCAT-AS-000950 | PATCH | Tomcat server version must not be sent with warnings and errors."
+  block:
+      - name: "LOW | TCAT-AS-000950 | PATCH | Tomcat server version must not be sent with warnings and errors. | Extract ServerInfo.properties"
+        shell: jar -xf /opt/tomcat/lib/catalina.jar org/apache/catalina/util/ServerInfo.properties
+        # create: 
+
+      - name: "LOW | TCAT-AS-000950 | PATCH | Tomcat server version must not be sent with warnings and errors. | Change server.info and server.number"
+        replace:
+            path: "{{ catalina_home_dir }}/lib/org/apache/catalina/util/ServerInfo.properties"
+            regexp: "{{ item.regexp }}"
+            replace: "{{ item.replace }}"
+        with_items:
+            - { regexp: 'server.info=.*', replace: 'server.info=Nunya' }
+            - { regexp: 'server.number=.*', replace: 'server.number=1.2.3.4' }
+        notify: restart tomcat
+        when: not tcat_privilaged_context_need
+
+      - name: "LOW | TCAT-AS-000950 | PATCH | Tomcat server version must not be sent with warnings and errors. | Set ServerInfo.properties"
+        shell: jar -uf catalina.jar org/apache/catalina/util/ServerInfo.properties
+
+      - name: "LOW | TCAT-AS-000950 | PATCH | Tomcat server version must not be sent with warnings and errors. | Clean up folder"
+        file:
+            path: "{{ catalina_home_dir }}/lib/org"
+            state: absent
+        when: tcat_privileged_context_need
+  when:
+      - TCAT_AS_000950
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-000950
+      - patch
+      - notimplemented
+
+- name: "LOW | TCAT-AS-001040 | PATCH | LockOutRealms lockOutTime attribute must be set to 600 seconds (10 minutes) for admin users."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Realm[@className='org.apache.catalina.realm.LockOutRealm']
+      attribute: lockOutTime
+      value: "600"
+  when:
+      - TCAT_AS_001040
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001040
+      - patch
+
+- name: "LOW | TCAT-AS-001260 | PATCH | $CATALINA_HOME/temp/ folder must be owned by tomcat user, group tomcat."
+  file:
+      path: "{{ catalina_home_dir }}/temp"
+      owner: tomcat
+      group: tomcat
+  when:
+      - TCAT_AS_001260
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001260
+      - patch
+
+- name: "LOW | TCAT-AS-001270 | PATCH | $CATALINA_HOME/temp folder permissions must be set to 750."
+  file:
+      path: "{{ catalina_home_dir }}/temp"
+      mode: 0750
+  when:
+      - TCAT_AS_001270
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001270
+      - patch
+
+- name: "LOW | TCAT-AS-001640 | PATCH | Application servers must use NIST-approved or NSA-approved key management technology and processes."
+  command: /bin/true
+  changed_when: false
+  failed_when: false
+  when:
+      - TCAT_AS_001640
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001640
+      - patch
+      - notimplemented
+
+- name: "LOW | TCAT-AS-001660 | PATCH | STRICT_SERVLET_COMPLIANCE must be set to true."
+  block:
+      - name: "LOW | TCAT-AS-001660 | AUDIT | STRICT_SERVLET_COMPLIANCE must be set to true. | Get CATALINA_OPTS config value"
+        shell: cat /etc/systemd/system/tomcat.service | grep -i CATALINA_OPTS | sed 's/.$//'
+        changed_when: false
+        failed_when: false
+        register: tcat_001660_catalina_opts
+
+      - name: "LOW | TCAT-AS-001660 | PATCH | STRICT_SERVLET_COMPLIANCE must be set to true. | Add STRICT_SERVLET_COMPLIANCE=true"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: "^Environment='CATALINA_OPTS=.*"
+            replace: "{{ tcat_001660_catalina_opts.stdout }} -Dorg.apache.catalina.STRICT_SERVLET_COMPLIANCE=true'"
+        when: "'STRICT_SERVLET_COMPLIANCE' not in tcat_001660_catalina_opts.stdout"
+        notify: restart tomcat
+
+      - name: "LOW | TCAT-AS-001660 | PATCH | STRICT_SERVLET_COMPLIANCE must be set to true. | Replace STRICT_SERVLET_COMPLIANCE=true"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: 'STRICT_SERVLET_COMPLIANCE=false'
+            replace: 'STRICT_SERVLET_COMPLIANCE=true'
+        when: "'STRICT_SERVLET_COMPLIANCE=false' in tcat_001660_catalina_opts.stdout"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_001660
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001660
+      - patch
+
+- name: "LOW | TCAT-AS-001710 | AUDIT | Hosted applications must be documented in the system security plan."
+  block:
+      - name: "LOW | TCAT-AS-001710 | AUDIT | Hosted applications must be documented in the system security plan. | Gather webapps"
+        command: ls {{ catalina_home_dir }}/webapps
+        changed_when: false
+        failed_when: false
+        register: tcat_001710_webapps
+
+      - name: "LOW | TCAT-AS-001710 | AUDIT | Hosted applications must be documented in the system security plan. | Display webapps"
+        debug:
+            msg:
+                - "Alert! Below is the list of webapps in use. Please retain the information in the SSP and present to the auditor in the event of a CCRI"
+                - "{{ tcat_001710_webapps.stdout_lines }}"
+  when:
+      - TCAT_AS_001710
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001710
+      - audit
+
+- name: "LOW | TCAT-AS-001720 | AUDIT | Connectors must be approved by the ISSO."
+  block:
+      - name: "LOW | TCAT-AS-001720 | AUDIT | Connectors must be approved by the ISSO. | Gather all connectors"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Connector
+            content: attribute
+        register: tcat_001720_connectors
+
+      - name: "LOW | TCAT-AS-001720 | AUDIT | Connectors must be approved by the ISSO. | Display connectors"
+        debug:
+            msg:
+                - "Alert! Below are the active connectors. Retain the information in the SSP and present to the auditor in the event of a CRI"
+                - "{{ tcat_001720_connectors.matches }}"
+  when:
+      - TCAT_AS_001720
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001720
+      - audit
+
+- name: "LOW | TCAT-AS-001730 | PATCH | Connector address attribute must be set."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Connector
+      attribute: address
+      value: "{{ tcat_listen_address }}"
+  notify: restart tomcat
+  when:
+      - TCAT_AS_001730
+  tags:
+      - cat3
+      - low
+      - TCAT-AS-001730
+      - patch

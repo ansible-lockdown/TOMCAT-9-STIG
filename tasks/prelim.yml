@@ -1,0 +1,35 @@
+---
+- name: Find $CATALINA_HOME directory
+  shell: cat /etc/systemd/system/tomcat.service | grep "CATALINA_HOME" | cut -f3 -d= | tr -d '"'
+  changed_when: false
+  register: catalina_find_home_dir
+
+- debug: var=ansible_facts
+- name: Install needed packages
+  block:
+      - name: Install RHEL7 based packages
+        yum:
+            name: "{{ item }}"
+            state: present
+        with_items:
+            - python-lxml
+            - auditd
+        when: ansible_facts.distribution_file_variety == "RedHat" and ansible_facts.distribution_major_version == "7"
+
+      - name: Install RHEL8 based packages
+        dnf:
+            name: "{{ item }}"
+            state: present
+        with_items:
+            - python3-lxml
+            - auditd
+        when: ansible_facts.distribution_file_variety == "RedHat" and ansible_facts.distribution_major_version == "8"
+
+      - name: Install Ubuntu based packages
+        apt:
+            name: "{{ item }}"
+            state: present
+        with_items:
+            - python-lxml
+            - auditd
+        when: ansible_facts.distribution_file_variety == "Debian" and ansible_facts.distribution_major_version == "16"

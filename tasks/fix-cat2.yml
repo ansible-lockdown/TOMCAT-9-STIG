@@ -1,0 +1,1509 @@
+---
+- name: |
+        "MEDIUM | TCAT-AS-001470 | PATCH | Tomcat server must be patched for security vulnerabilities."
+        "MEDIUM | TCAT-AS-001550 | PATCH | Tomcat server must be patched for security vulnerabilities."
+  yum:
+      name: tomcat
+      state: present
+  when:
+      - tcat_automate_package_upgrades
+      - TCAT_AS_001470
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001470
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000020 | PATCH | Secured connectors must be configured to use strong encryption ciphers."
+        "MEDIUM | TCAT-AS-000040 | PATCH | TLS 1.2 must be used on secured HTTP connectors."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000020 | PATCH | Secured connectors must be configured to use strong encryption ciphers. | Set SSL Protocol to TLS1.2"
+              "MEDIUM | TCAT-AS-000040 | PATCH | TLS 1.2 must be used on secured HTTP connectors. | Set SSL Protocol to TLS1.2""
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Connector
+            attribute: "{{ item.attribute }}"
+            value: "{{ item.value }}"
+        with_items:
+            - { attribute: SSLEnabled, value: 'true' }
+            - { attribute: SSLEnabledProtocols, value: TLS1.2 }
+        notify: restart tomcat
+
+      - name: |
+              "MEDIUM | TCAT-AS-000020 | AUDIT | Secured connectors must be configured to use strong encryption ciphers. | Find redirect ports"
+              "MEDIUM | TCAT-AS-000040 | AUDIT | TLS 1.2 must be used on secured HTTP connectors. | Find redirect ports"
+        shell: cat /opt/tomcat/conf/server.xml | grep -i redirectPort | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        failed_when: false
+        register: tcat_000020_redirect_ports
+
+      - name: |
+              "MEDIUM | TCAT-AS-000020 | AUDIT | Secured connectors must be configured to use strong encryption ciphers. | Show redirect ports"
+              "MEDIUM | TCAT-AS-000040 | AUDIT | TLS 1.2 must be used on secured HTTP connectors. | Show redirect ports"
+        debug:
+            msg:
+                - "Alert! Below are the currently configured redirect ports"
+                - "Please review to confirm they are secure ports"
+                - "{{ tcat_000020_redirect_ports.stdout_lines }}"
+  when:
+      - TCAT_AS_000020
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000020
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000050 | PATCH | AccessLogValve must be configured for each application context."
+        "MEDIUM | TCAT-AS-000160 | PATCH | AccessLogValve must be configured for each application context."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000050 | AUDIT | AccessLogValve must be configured for each application context. | Determine if AccessLogValve already configured"
+              "MEDIUM | TCAT-AS-000160 | AUDIT | AccessLogValve must be configured for each application context. | Determine if AccessLogValve already configured"
+        shell: cat /opt/tomcat/conf/server.xml | grep -i -A2 '<Valve className="org.apache.catalina.valves.AccessLogValve"' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        failed_when: false
+        register: tcat_000050_accesslogvalve_exist
+
+      - name: |
+              "MEDIUM | TCAT-AS-000050 | PATCH | AccessLogValve must be configured for each application context. | Insert settings if they do not exist"
+              "MEDIUM | TCAT-AS-000160 | PATCH | AccessLogValve must be configured for each application context. | Insert settings if they do not exist"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Host/Valve
+            attribute: "{{ item.attribute }}"
+            value: "{{ item.value }}"
+        with_items:
+            - { attribute: className, value: org.apache.catalina.valves.AccessLogValve }
+            - { attribute: directory, value: "logs" }
+            - { attribute: prefix, value: "{{ tcat_access_log_valve.prefix }}" }
+            - { attribute: suffix, value: "{{ tcat_access_log_valve.suffix }}" }
+            - { attribute: pattern, value: "{{ tcat_access_log_valve.pattern }}" }
+        notify: restart tomcat
+
+      - name: |
+              "MEDIUM | TCAT-AS-000050 | AUDIT | AccessLogValve must be configured for each application context. | Message out current config"
+              "MEDIUM | TCAT-AS-000160 | AUDIT | AccessLogValve must be configured for each application context. | Message out current config"
+        debug:
+            msg:
+                - "Alert! Below are the current AccessLogValve confgurations settings"
+                - "{{ tcat_000050_accesslogvalve_exist.stdout_lines }}"
+        when:
+            - tcat_000050_accesslogvalve_exist.stdout != ""
+  when:
+      - TCAT_AS_000050
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000050
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000070 | PATCH | Cookies must have secure flag set."
+        "MEDIUM | TCAT-AS-000080 | PATCH | Cookies must have http-only flag set."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000070 | AUDIT | Cookies must have secure flag set. | Check for http-only and secure settings"
+              "MEDIUM | TCAT-AS-000080 | AUDIT | Cookies must have http-only flag set. | Check for http-only and secure settings"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:session-config/x:cookie-config/x:{{ item }}
+            count: yes
+        with_items:
+            - secure
+            - http-only
+        register: tcat_000070_secure_httponly_exist
+
+      - name: |
+              "MEDIUM | TCAT-AS-000070 | PATCH | Cookies must have secure flag set."
+              "MEDIUM | TCAT-AS-000080 | PATCH | Cookies must have http-only flag set."
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:session-config
+            pretty_print: yes
+            add_children:
+            - cookie-config:
+                _:
+                    - secure: "true"
+                    - http-only: "true"
+        notify: restart tomcat
+        when: tcat_000070_secure_httponly_exist.results[0].count == 0 and tcat_000070_secure_httponly_exist.results[1].count == 0
+
+      - name: "MEDIUM | TCAT-AS-000070 | PATCH | Cookies must have secure flag set. | replace secure setting"
+        replace:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            regexp: '      <secure>false</secure>'
+            replace: '      <secure>true</secure>'
+        when: tcat_000070_secure_httponly_exist.results[0].count > 0
+        notify: restart tomcat
+
+      - name: "MEDIUM | TCAT-AS-000080 | PATCH | Cookies must have http-only flag set. | replace http-only setting"
+        replace:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            regexp: '      <http-only>false</http-only>'
+            replace: '      <http-only>true</http-only>'
+        when: tcat_000070_secure_httponly_exist.results[1].count > 0
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000070
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000070
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000090 | PATCH | DefaultServlet must be set to readonly for PUT and DELETE."
+  block:
+      - name: "MEDIUM | TCAT-AS-000090 | AUDIT | DefaultServlet must be set to readonly for PUT and DELETE. | Check for readonly"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                  x: http://xmlns.jcp.org/xml/ns/javaee
+                  y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:servlet[x:servlet-name="default"]/x:init-param[x:param-name="readonly"]
+            count: yes
+        register: tcat_000090_readyonly_property
+
+      - name: "MEDIUM | TCAT-AS-000090 | PATCH | DefaultServlet must be set to readonly for PUT and DELETE. | Set readonly if doesn't exist"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                  x: http://xmlns.jcp.org/xml/ns/javaee
+                  y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: //x:servlet[x:servlet-name="default"]
+            pretty_print: yes
+            add_children:
+            - init-param:
+                _:
+                    - param-name: "readonly"
+                    - param-value: "true"
+        notify: restart tomcat
+        when: tcat_000090_readyonly_property.count == 0
+
+      - name: "MEDIUM | TCAT-AS-000090 | PATCH | DefaultServlet must be set to readonly for PUT and DELETE. | Set readonly if already exists"
+        replace:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            regexp: '      <param-name>readonly</param-name>\n      <param-value>false</param-value>'
+            replace: '      <param-name>readonly</param-name>\n      <param-value>true</param-value>'
+        notify: restart tomcat
+        when: tcat_000090_readyonly_property.count > 0
+  when:
+      - TCAT_AS_000090
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000090
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000100 | PATCH | Connectors must be secured."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Connector
+      pretty_print: yes
+      attribute: "{{ item.attribute }}"
+      value: "{{ item.value }}"
+  with_items:
+      - { attribute: "scheme", value: "https" }
+      - { attribute: "secure", value: "true" }
+  when:
+      - TCAT_AS_000100
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000100
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000110 | PATCH | The Java Security Manager must be enabled."
+  block:
+      - name: "MEDIUM | TCAT-AS-000110 | AUDIT | The Java Security Manager must be enabled. | Get execstart config value"
+        shell: cat /etc/systemd/system/tomcat.service | grep -i execstart
+        changed_when: false
+        failed_when: false
+        register: tcat_000110_exectstart
+
+      - name: "MEDIUM | TCAT-AS-000110 | PATCH | The Java Security Manager must be enabled. | Add Security if missing"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: '{{ tcat_000110_exectstart.stdout }}'
+            replace: '{{ tcat_000110_exectstart.stdout }} -security'
+        when: "'security' not in tcat_000110_exectstart.stdout"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000110
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000110
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000170 | PATCH | Tomcat servers behind a proxy or load balancer must log client IP."
+  block:
+      - name: "MEDIUM | TCAT-AS-000170 | PATCH | Tomcat servers behind a proxy or load balancer must log client IP. | Create RemoteIpValve node"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='localhost']/Valve[@className='org.apache.catalina.valves.RemoteIpValve']
+            pretty_print: yes
+        when: tcat_routable_ip_proxy
+        notify: restart tomcat
+
+      - name: "MEDIUM | TCAT-AS-000170 | PATCH | Tomcat servers behind a proxy or load balancer must log client IP. | Set internalProxies"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='localhost']/Valve[@className='org.apache.catalina.valves.RemoteIpValve']
+            attribute: internalProxies
+            value: "{{ tcat_remoteipvalve_proxy_addresses }}"
+            pretty_print: yes
+        when: tcat_routable_ip_proxy
+        notify: restart tomcat
+
+      - name: "MEDIUM | TCAT-AS-000170 | PATCH | Tomcat servers behind a proxy or load balancer must log client IP. | Set AccessLogValve"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Valve[@className='org.apache.catalina.valves.AccessLogValve']
+            attribute: requestAttributesEnabled
+            value: "true"
+            pretty_print: yes
+        notify: restart tomcat
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000170
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000180 | PATCH | Role based access controls must be configured for logging."
+        "MEDIUM | TCAT-AS-000190 | PATCH | AccessLogValve must be configured for each application context."
+        "MEDIUM | TCAT-AS-000210 | PATCH | AccessLogValve must be configured for each application context."
+        "MEDIUM | TCAT-AS-000220 | PATCH | AccessLogValve must be configured per each virtual host."
+        "MEDIUM | TCAT-AS-000230 | PATCH | AccessLogValve must be configured for Catalina engine."
+        "MEDIUM | TCAT-AS-000280 | PATCH | AccessLogValve must be configured for each application context."
+        "MEDIUM | TCAT-AS-000290 | PATCH | AccessLogValve must be configured per each virtual host.
+        "MEDIUM | TCAT-AS-000300 | PATCH | AccessLogValve must be configured for Catalina engine."
+        "MEDIUM | TCAT-AS-000310 | PATCH | AccessLogValve must be configured for Catalina engine."
+        "MEDIUM | TCAT-AS-001570 | PATCH | AccessLogValve must be configured for Catalina engine."
+        "MEDIUM | TCAT-AS-001580 | PATCH | AccessLogValve must be configured per each virtual host."
+        "MEDIUM | TCAT-AS-001600 | PATCH | AccessLogValve must be configured per each virtual host."
+        "MEDIUM | TCAT-AS-001610 | PATCH | AccessLogValve must be configured per each virtual host."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000180 | AUDIT | Role based access controls must be configured for logging. | Find hosts"
+              "MEDIUM | TCAT-AS-000190 | AUDIT | AccessLogValve must be configured for each application context. | Find hosts"
+              "MEDIUM | TCAT-AS-000210 | AUDIT | AccessLogValve must be configured for each application context. | Find hosts"
+              "MEDIUM | TCAT-AS-000220 | AUDIT | AccessLogValve must be configured per each virtual host. | Find hosts"
+              "MEDIUM | TCAT-AS-000230 | AUDIT | AccessLogValve must be configured for Catalina engine. | Find hosts"
+              "MEDIUM | TCAT-AS-000280 | AUDIT | AccessLogValve must be configured for each application context. | Find hosts"
+              "MEDIUM | TCAT-AS-000290 | AUDIT | AccessLogValve must be configured per each virtual host. | Find hosts"
+              "MEDIUM | TCAT-AS-000300 | AUDIT | AccessLogValve must be configured for Catalina engine. | Find hosts"
+              "MEDIUM | TCAT-AS-000310 | AUDIT | AccessLogValve must be configured for Catalina engine. | Find hosts"
+              "MEDIUM | TCAT-AS-001570 | AUDIT | AccessLogValve must be configured for Catalina engine. | Find hosts"
+              "MEDIUM | TCAT-AS-001580 | AUDIT | AccessLogValve must be configured per each virtual host. | Find hosts"
+              "MEDIUM | TCAT-AS-001600 | AUDIT | AccessLogValve must be configured per each virtual host. | Find hosts"
+              "MEDIUM | TCAT-AS-001610 | AUDIT | AccessLogValve must be configured per each virtual host. | Find hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine//Host
+            content: attribute
+        register: tcat_001570_host_name_values
+
+      - name: |
+              "MEDIUM | TCAT-AS-000180 | PATCH | Role based access controls must be configured for logging. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000190 | PATCH | AccessLogValve must be configured for each application context. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000210 | PATCH | AccessLogValve must be configured for each application context. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000220 | PATCH | AccessLogValve must be configured per each virtual host. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000230 | PATCH | AccessLogValve must be configured for Catalina engine. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000280 | PATCH | AccessLogValve must be configured for each application context. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000290 | PATCH | AccessLogValve must be configured per each virtual host. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000300 | PATCH | AccessLogValve must be configured for Catalina engine. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-000310 | PATCH | AccessLogValve must be configured for Catalina engine. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-001570 | PATCH | AccessLogValve must be configured for Catalina engine. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-001580 | PATCH | AccessLogValve must be configured per each virtual host. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-001600 | PATCH | AccessLogValve must be configured per each virtual host. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-001610 | PATCH | AccessLogValve must be configured per each virtual host. | Set AccessLogValve to hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='{{ item[0].Host.name }}']/Valve
+            attribute: "{{ item[1].attribute }}"
+            value: "{{ item[1].value }}"
+            pretty_print: yes
+        with_nested:
+            - "{{ tcat_001570_host_name_values.matches }}"
+            - "{{ tcat_big_access_log_valve }}"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000180
+      - TCAT_AS_000190
+      - TCAT_AS_000210
+      - TCAT_AS_000220
+      - TCAT_AS_000230
+      - TCAT_AS_000280
+      - TCAT_AS_000290
+      - TCAT_AS_000300
+      - TCAT_AS_000310
+      - TCAT_AS_001570
+      - TCAT_AS_001580
+      - TCAT_AS_001600
+      - TCAT_AS_001610
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000190
+      - TCAT-AS-000180
+      - TCAT-AS-000210
+      - TCAT-AS-000220
+      - TCAT-AS-000230
+      - TCAT-AS-000280
+      - TCAT-AS-000290
+      - TCAT-AS-000300
+      - TCAT-AS-000310
+      - TCAT-AS-001570
+      - TCAT-AS-001580
+      - TCAT-AS-001600
+      - TCAT-AS-001610
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000240 | PATCH | Date and time of events must be logged."
+        "MEDIUM | TCAT-AS-000250 | PATCH | Remote hostname must be logged."
+        "MEDIUM | TCAT-AS-000270 | PATCH | The first line of request must be logged."
+
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Valve[@className='org.apache.catalina.valves.AccessLogValve']
+      attribute: pattern
+      value: "{{ tcat_access_log_valve.pattern }}"
+  when:
+      - TCAT_AS_000240
+      - TCAT_AS_000250
+      - TCAT_AS_000270
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000240
+      - TCAT-AS-000250
+      - TCAT-AS-000270
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000360 | PATCH | $CATALINA_HOME/logs folder permissions must be set to 750."
+  block:
+      - name: "MEDIUM | TCAT-AS-000360 | AUDIT | $CATALINA_HOME/logs folder permissions must be set to 750. | Check for folders"
+        shell: find {{ catalina_home_dir }}/logs -follow -maxdepth 0 -type d
+        changed_when: false
+        failed_when: false
+        register: tcat_000360_logs_folders
+
+      - name: "MEDIUM | TCAT-AS-000360 | PATCH | $CATALINA_HOME/logs folder permissions must be set to 750. | Set permissions"
+        file:
+            path: "{{ tcat_000360_logs_folders.stdout }}"
+            mode: 0750
+  when:
+      - TCAT_AS_000360
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000360
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000361 | PATCH | Files in the $CATALINA_HOME/logs/ folder must have their permissions set to 640."
+  block:
+      - name: "MEDIUM | TCAT-AS-000361 | AUDIT | Files in the $CATALINA_HOME/logs/ folder must have their permissions set to 640. | Get list of log files"
+        shell: find {{ catalina_home_dir }}/logs/* -follow -maxdepth 0 -type f
+        changed_when: false
+        failed_when: false
+        register: tcat_000361_log_files
+
+      - name: "MEDIUM | TCAT-AS-000361 | PATCH | Files in the $CATALINA_HOME/logs/ folder must have their permissions set to 640. | Set file permissions"
+        file:
+            path: "{{ item }}"
+            mode: 0640
+        with_items:
+            - "{{ tcat_000361_log_files.stdout_lines }}"
+  when:
+      - TCAT_AS_000361
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000361
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000370 | PATCH | Files in the $CATALINA_HOME/conf/ folder must have their permissions set to 640."
+  block:
+      - name: "MEDIUM | TCAT-AS-000370 | AUDIT | Files in the $CATALINA_HOME/conf/ folder must have their permissions set to 640. | Find config files"
+        shell: find {{ catalina_home_dir }}/conf/* -follow -maxdepth 0 -type f
+        changed_when: false
+        failed_when: false
+        register: tcat_000370_config_files
+
+      - name: "MEDIUM | TCAT-AS-000370 | PATCH | Files in the $CATALINA_HOME/conf/ folder must have their permissions set to 640. | Change config file permissions"
+        file:
+            path: "{{ item }}"
+            mode: 0640
+        with_items:
+            - "{{ tcat_000370_config_files.stdout_lines }}"
+  when:
+      - TCAT_AS_000370
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000370
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000371 | PATCH | $CATALINA_HOME/conf folder permissions must be set to 750."
+  block:
+      - name: "MEDIUM | TCAT-AS-000371 | AUDIT | $CATALINA_HOME/conf folder permissions must be set to 750. | Find config folder"
+        shell: find {{ catalina_home_dir }}/conf -follow -maxdepth 0 -type d
+        changed_when: false
+        failed_when: false
+        register: tcat_000371_config_folder
+
+      - name: "MEDIUM | TCAT-AS-000371 | PATCH | $CATALINA_HOME/conf folder permissions must be set to 750. | Set folder permissions"
+        file:
+            path: "{{ item }}"
+            mode: 0750
+        with_items:
+            - "{{ tcat_000371_config_folder.stdout_lines }}"
+  when:
+      - TCAT_AS_000371
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000371
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000380 | PATCH | Jar files in the $CATALINA_HOME/bin/ folder must have their permissions set to 640."
+  block:
+      - name: "MEDIUM | TCAT-AS-000380 | AUDIT | Jar files in the $CATALINA_HOME/bin/ folder must have their permissions set to 640. | Find jar files"
+        shell: find {{ catalina_home_dir }}/bin/*jar -follow -maxdepth 0 -type f
+        changed_when: false
+        failed_when: false
+        register: tcat_000380_bin_jar_files
+
+      - name: "MEDIUM | TCAT-AS-000380 | PATCH | Jar files in the $CATALINA_HOME/bin/ folder must have their permissions set to 640. | Set permissions"
+        file:
+            path: "{{ item }}"
+            mode: 0640
+        with_items:
+            - "{{ tcat_000380_bin_jar_files.stdout_lines }}"
+  when:
+      - TCAT_AS_000380
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000380
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000390 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750."
+        "MEDIUM | TCAT-AS-000400 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750."
+        "MEDIUM | TCAT-AS-000410 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000390 | AUDIT | $CATALINA_HOME/bin folder permissions must be set to 750. | Find bin folder"
+              "MEDIUM | TCAT-AS-000400 | AUDIT | $CATALINA_HOME/bin folder permissions must be set to 750. | Find bin folder"
+              "MEDIUM | TCAT-AS-000410 | AUDIT | $CATALINA_HOME/bin folder permissions must be set to 750. | Find bin folder"
+        shell: find {{ catalina_home_dir }}/bin -follow -maxdepth 0 -type d
+        changed_when: false
+        failed_when: false
+        register: tcat_000390_bin_folder
+
+      - name: |
+              "MEDIUM | TCAT-AS-000390 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750. | Set bin folder permissions"
+              "MEDIUM | TCAT-AS-000400 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750. | Set bin folder permissions"
+              "MEDIUM | TCAT-AS-000410 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750. | Set bin folder permissions"
+        file:
+            path: "{{ tcat_000390_bin_folder.stdout }}"
+            mode: 0750
+  when:
+      - TCAT_AS_000390
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000390
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000450 | PATCH | Tomcat user UMASK must be set to 0027."
+  replace:
+      path: /etc/systemd/system/tomcat.service
+      regexp: '^UMask=(.*?).*'
+      replace: UMask=0027
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000450
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000450
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000470 | PATCH | Stack tracing must be disabled."
+  block:
+      - name: "MEDIUM | TCAT-AS-000470 | AUDIT | Stack tracing must be disabled. | Gather webapps"
+        command: ls {{ catalina_home_dir }}/webapps
+        changed_when: false
+        failed_when: false
+        register: tcat_000470_webapp_list
+
+      - name: "MEDIUM | TCAT-AS-000470 | PATCH | Stack tracing must be disabled. | Set allowTrace to false"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Connector
+            attribute: allowTrace
+            value: "false"
+            pretty_print: yes
+        notify: restart tomcat
+
+      - name: "MEDIUM | TCAT-AS-000470 | PATCH | Stack tracing must be disabled. | Set allowTrace to false in webapps"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/{{ item }}/WEB-INF/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+                z: http://xmlns.jcp.org/xml/ns/javaee
+            xpath: //x:web-resource-collection/x:http-method[text()="TRACE"]
+            pretty_print: yes
+            state: absent
+        notify: restart tomcat
+        with_items:
+            - "{{ tcat_000470_webapp_list.stdout_lines }}"
+  when:
+      - TCAT_AS_000470
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000470
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000490 | PATCH | The shutdown port must be disabled."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: /Server
+      attribute: port
+      value: "-1"
+      pretty_print: yes
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000490
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000490
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000500 | AUDIT | Unapproved connectors must be disabled."
+  block:
+      - name: "MEDIUM | TCAT-AS-000500 | AUDIT | Unapproved connectors must be disabled. | Get lsit of connectors"
+        shell: 'cat {{ catalina_home_dir }}/conf/server.xml | grep Connector'
+        changed_when: false
+        failed_when: false
+        register: tcat_000500_list_connectors
+
+      - name: "MEDIUM | TCAT-AS-000500 | AUDIT | Unapproved connectors must be disabled. | Show connectors"
+        debug:
+            msg:
+                - "Alert! Below are the list of connectors and settings. Please review with ISSO that all connectors are approved"
+                - "If any unapproved connectors are found please remove them"
+                - "{{ tcat_000500_list_connectors.stdout_lines }}"
+  when:
+      - TCAT_AS_000500
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000500
+      - audit
+
+- name: "MEDIUM | TCAT-AS-000530 | AUDIT | The deployXML attribute must be set to false in hosted environments."
+  block:
+      - name: "MEDIUM | TCAT-AS-000530 | AUDIT | The deployXML attribute must be set to false in hosted environments. | Find deployXML settings"
+        shell: 'cat {{ catalina_home_dir }}/conf/server.xml | grep -A5 -B5 -i deployXML="true"'
+        changed_when: false
+        failed_when: false
+        register: tcat_000530_deployxml_instances
+
+      - name: "MEDIUM | TCAT-AS-000530 | AUDIT | The deployXML attribute must be set to false in hosted environments. | Message out deployXML instances"
+        debug:
+            msg:
+                - "Alert! Below are the instances of deployXML being turned"
+                - "Please review if they are authorized"
+                - "{{ tcat_000530_deployxml_instances.stdout_lines }}"
+        when: tcat_000530_deployxml_instances.stdout != ""
+
+      - name: "MEDIUM | TCAT-AS-000530 | AUDIT | The deployXML attribute must be set to false in hosted environments. | Message out no deployXML instances"
+        debug:
+            msg:
+                - "Good News! There are no instances of deployXML enabled to review"
+        when: tcat_000530_deployxml_instances.stdout == ""
+  when:
+      - TCAT_AS_000530
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000530
+      - audit
+
+- name: "MEDIUM | TCAT-AS-000540 | PATCH | Autodeploy must be disabled."
+  block:
+      - name: "MEDIUM | TCAT-AS-000540 | AUDIT | Autodeploy must be disabled. | Gather host names"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine//Host
+            content: attribute
+        register: tcat_000540_host_name_values
+
+      - name: "MEDIUM | TCAT-AS-000540 | PATCH | Autodeploy must be disabled. | Set xpoweredBy"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='{{ item.Host.name }}']
+            attribute: xpoweredBy
+            value: "false"
+            pretty_print: yes
+        with_items:
+            - "{{ tcat_000540_host_name_values.matches }}"
+
+      - name: "MEDIUM | TCAT-AS-000540 | PATCH | Autodeploy must be disabled. | Set autoDeploy"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='{{ item.Host.name }}']
+            attribute: autoDeploy
+            value: "false"
+            pretty_print: yes
+        with_items:
+            - "{{ tcat_000540_host_name_values.matches }}"
+        when: tcat_disruption_high
+  when:
+      - TCAT_AS_000540
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000540
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000590 | PATCH | Applications in privileged mode must be approved by the ISSO."
+  block:
+      - name: "MEDIUM | TCAT-AS-000590 | AUDIT | Applications in privileged mode must be approved by the ISSO. | Gather webapps paths"
+        find:
+            paths: "{{ catalina_home_dir }}/webapps"
+            patterns: context.xml
+            recurse: yes
+        register: tcat_000590_webapps_contextxml
+
+      - name: "MEDIUM | TCAT-AS-000590 | PATCH | Applications in privileged mode must be approved by the ISSO. | Set privileged in context.xml"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/context.xml"
+            xpath: /Context
+            attribute: privileged
+            value: "false"
+        when: not tcat_privilaged_context_need
+
+      - name: "MEDIUM | TCAT-AS-000590 | PATCH | Applications in privileged mode must be approved by the ISSO. | Set privileged in webapps"
+        xml:
+            path: "{{ item.path }}"
+            xpath: /Context
+            attribute: privileged
+            value: "false"
+            pretty_print: yes
+        when: not tcat_privilaged_context_need
+        with_items:
+            - "{{ tcat_000590_webapps_contextxml.files }}"
+  when:
+      - TCAT_AS_000590
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000590
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000600 | PATCH | Tomcat management applications must use LDAP realm authentication."
+  block:
+      - name: "MEDIUM | TCAT-AS-000600 | AUDIT | Tomcat management applications must use LDAP realm authentication. | Find JNDIRealm"
+        shell: cat {{ catalina_home_dir }}/conf/server.xml | grep -i -A8 JNDIRealm
+        changed_when: false
+        failed_when: false
+        register: tcat_000600_jndirealm_settings
+
+      - name: "MEDIUM | TCAT-AS-000600 | PATCH | Tomcat management applications must use LDAP realm authentication. | Insert JNDIRealm settings"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Realm/Realm
+            attribute: "{{ item.attribute }}"
+            value: "{{ item.value }}"
+        with_items:
+            - { attribute: className, value: org.apache.catalina.realm.JNDIRealm }
+            - { attribute: connectionURL, value: "{{ tcat_jndi_realm.connection_url }}" }
+            - { attribute: userPattern, value: "{{ tcat_jndi_realm.user_pattern }}" }
+            - { attribute: roleBase, value: "{{ tcat_jndi_realm.role_base }}" }
+            - { attribute: roleName, value: "{{ tcat_jndi_realm.role_name }}" }
+            - { attribute: roleSearch, value: "{{ tcat_jndi_realm.role_search }}" }
+        notify: restart tomcat
+        when:
+            - tcat_000600_jndirealm_settings.stdout == ""
+            - not tcat_manager_host_manager_removed
+
+      - name: "MEDIUM | TCAT-AS-000600 | AUDIT | Tomcat management applications must use LDAP realm authentication. | Message out settings"
+        debug:
+            msg:
+                - "Alert! Please review the settings to below to confirm LDAP settings"
+                - "{{ tcat_000600_jndirealm_settings.stdout_lines }}"
+        when: tcat_000600_jndirealm_settings.stdout != ""
+  when:
+      - TCAT_AS_000600
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000600
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000610 | PATCH | JMX authentication must be secured."
+  replace:
+      path: /etc/systemd/system/tomcat.service
+      regexp: 'jmxremote.authenticate=false'
+      replace: 'jmxremote.authenticate=true'
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000610
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000610
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000680 | PATCH | TLS 1.2 must be used on secured connectors."
+        "MEDIUM | TCAT-AS-001480 | PATCH | TLS 1.2 must be used on secured connectors."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: /Server/Service//Connector[contains(translate(@protocol, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'),'http')]
+      attribute: SSLEnabledProtocols
+      value: TLS1.2
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000680
+      - TCAT_AS_001480
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000680
+      - TCAT-AS-001480
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000700 | PATCH | DoD root CA certificates must be installed in Tomcat trust store."
+  command: /bin/true
+  changed_when: false
+  failed_when: false
+  when:
+      - TCAT_AS_000700
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000700
+      - patch
+      - notimplemented
+
+- name: "MEDIUM | TCAT-AS-000710 | PATCH | Keystore file must be protected."
+  block:
+      - name: "MEDIUM | TCAT-AS-000710 | AUDIT | Keystore file must be protected. | Get keystore files"
+        shell: cat /opt/tomcat/conf/server.xml | grep -i keystorefile | cut -f2 -d= | tr -d '"'
+        changed_when: false
+        failed_when: false
+        register: tcat_000710_keystore_files
+
+      - name: "MEDIUM | TCAT-AS-000710 | AUDIT | Keystore file must be protected. | Check if keystore files exist"
+        stat:
+            path: '{{ catalina_home_dir }}/{{ tcat_000710_keystore_files.stdout }}'
+        register: tcat_000710_keystore_files_exist
+
+      - name: "MEDIUM | TCAT-AS-000710 | PATCH | Keystore file must be protected. | Change keystore file permissions"
+        file:
+            path: '{{ catalina_home_dir }}/{{ item }}'
+            owner: root
+            group: tomcat
+            mode: 0640
+        with_items:
+            - "{{ tcat_000710_keystore_files.stdout_lines }}"
+        when: tcat_000710_keystore_files_exist.stat.exists
+
+      - name: "MEDIUM | TCAT-AS-000710 | AUDIT | Keystore file must be protected. | Alert no keystore files found"
+        debug:
+            msg:
+                - "Warning! There were no keystore files found in the configured location"
+                - "There might be a valid reason for this but please check to confirm"
+                - "Make sure the owner/group/perms are root/tomcat/640 on those files"
+        when: not tcat_000710_keystore_files_exist.stat.exists
+  when:
+      - TCAT_AS_000710
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000710
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000780 | PATCH | Access to JMX management interface must be restricted."
+  block:
+      - name: "MEDIUM | TCAT-AS-000780 | AUDIT | Access to JMX management interface must be restricted. Check if JMX remote"
+        shell: cat /etc/systemd/system/tomcat.service | grep -i jmxremote
+        changed_when: false
+        failed_when: false
+        register: tcat_000780_jmxremote_enabled
+
+      - name: "MEDIUM | TCAT-AS-000780 | PATCH | Access to JMX management interface must be restricted. | Set JMXRemote host"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: -Dcom.sun.management.jmxremote.host=([^\s']+)
+            replace: '-Dcom.sun.management.jmxremote.host={{ tcat_jmxremote_host }}'
+        notify: restart tomcat
+        when:
+            - tcat_jmx_management
+            - tcat_000780_jmxremote_enabled.stdout != ""
+  when:
+      - TCAT_AS_000780
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000780
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000790 | PATCH | Access to Tomcat manager application must be restricted."
+  block:
+      - name: "MEDIUM | TCAT-AS-000790 | AUDIT | Access to Tomcat manager application must be restricted. | Check if RemoteAddr/CIDRValve enabled"
+        shell: 'cat /opt/tomcat/webapps/manager/META-INF/context.xml | grep -i -A1 "RemoteAddrValue|RemoteCIDRValve"'
+        changed_when: false
+        failed_when: false
+        register: tcat_000790_remote_addr_civ_valve
+
+      - name: "MEDIUM | TCAT-AS-000790 | PATCH | Access to Tomcat manager application must be restricted. | Set RemoteAddrValve settings"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/manager/META-INF/context.xml"
+            xpath: /Context/Valve
+            attribute: "{{ item.attribute }}"
+            value: "{{ item.value }}"
+        with_items:
+            - { attribute: className, value: org.apache.catalina.valves.RemoteAddrValve }
+            - { attribute: allow, value: "{{ tcat_remoteaddrvalve_value }}" }
+        notify: restart tomcat
+        when:
+            - tcat_000790_remote_addr_civ_valve.stdout == ""
+            - tcat_remote_addr_valve
+
+      - name: "MEDIUM | TCAT-AS-000790 | PATCH | Access to Tomcat manager application must be restricted. | Set RemoteCIDRValve settings"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/manager/META-INF/context.xml"
+            xpath: /Context/Valve
+            attribute: "{{ item.attribute }}"
+            value: "{{ item.value }}"
+        with_items:
+            - { attribute: className, value: org.apache.catalina.valves.RemoteCIDRValve }
+            - { attribute: allow, value: "{{ tcat_remotecidrvalve_value }}" }
+        notify: restart tomcat
+        when:
+            - tcat_000790_remote_addr_civ_valve.stdout == ""
+            - tcat_remote_cidr_valve
+  when:
+      - TCAT_AS_000790
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000790
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000800 | PATCH | Tomcat servers must mutually authenticate proxy or load balancer connections. | Set clientAuth if address used"
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Connector[@address='{{ item }}']
+      attribute: clientAuth
+      value: "true"
+      pretty_print: yes
+  failed_when: false
+  with_items:
+      - "{{ tcat_connect_proxy_address }}"
+  when:
+      - TCAT_AS_000800
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000800
+      - patch
+
+- name: "MEDIUM | TCAT-AS-000800 | PATCH | Tomcat servers must mutually authenticate proxy or load balancer connections. | Check for clustering"
+  block:
+      - name: "MEDIUM | TCAT-AS-000800 | AUDIT | Tomcat servers must mutually authenticate proxy or load balancer connections. | Check for clustering"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Cluster
+            count: yes
+        register: tcat_000800_clustering_exist
+
+      - name: "MEDIUM | TCAT-AS-000800 | PATCH | Tomcat servers must mutually authenticate proxy or load balancer connections. | Set Interceptor"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Cluster/Interceptor
+            pretty_print: yes
+            attribute: className
+            value: "org.apache.catalina.tribes.group.interceptors.EncryptInterceptor"
+        when: tcat_000800_clustering_exist.count >0
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000860
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000860
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000920 | PATCH | ErrorReportValve showServerInfo must be set to false."
+        "MEDIUM | TCAT-AS-000940 | PATCH | ErrorReportValve showReport must be set to false."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000920 | AUDIT | ErrorReportValve showServerInfo must be set to false. | Get hosts"
+              "MEDIUM | TCAT-AS-000940 | AUDIT | ErrorReportValve showReport must be set to false. | Get hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Host
+            content: attribute
+        register: tcat_000920_host_name_values
+
+      - name: |
+              "MEDIUM | TCAT-AS-000920 | PATCH | ErrorReportValve showServerInfo must be set to false. | Set ErrorReportValve node"
+              "MEDIUM | TCAT-AS-000940 | PATCH | ErrorReportValve showReport must be set to false. | Set ErrorReportValve node"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Host[@name='{{ item.Host.name }}']/Valve[@className='org.apache.catalina.valves.ErrorReportValve']
+            attribute: showServerInfo
+            value: "false"
+            pretty_print: yes
+        with_items:
+            - "{{ tcat_000920_host_name_values.matches }}"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000920
+      - TCAT_AS_000940
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000920
+      - TCAT-AS-000940
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-000970 | PATCH | Idle timeout for management application must be set to 10 minutes."
+        "MEDIUM | TCAT-AS-001300 | PATCH | Idle timeout for management application must be set to 10 minutes."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-000970 | AUDIT | Idle timeout for management application must be set to 10 minutes. | Get session-timeout existence""
+              "MEDIUM | TCAT-AS-001300 | AUDIT | Idle timeout for management application must be set to 10 minutes. | Get session-timeout existence""
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: /x:web-app/x:session-config/x:session-timeout
+            count: yes
+        register: tcat_000970_session_timout_exists
+
+      - name: |
+              "MEDIUM | TCAT-AS-000970 | PATCH | Idle timeout for management application must be set to 10 minutes. | Set session-timeout to 10 minutes"
+              "MEDIUM | TCAT-AS-001300 | PATCH | Idle timeout for management application must be set to 10 minutes. | Set session-timeout to 10 minutes"
+        replace:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            regexp: '        <session-timeout>(.*?)</session-timeout>'
+            replace: '        <session-timeout>10</session-timeout>'
+        when: tcat_000970_session_timout_exists.count >0
+        notify: restart tomcat
+
+      - name: |
+              "MEDIUM | TCAT-AS-000970 | PATCH | Idle timeout for management application must be set to 10 minutes. | Create session-config node"
+              "MEDIUM | TCAT-AS-001300 | PATCH | Idle timeout for management application must be set to 10 minutes. | Create session-config node"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: /x:web-app/x:session-config
+            pretty_print: yes
+            add_children:
+            - session-timeout: "10"
+        when: tcat_000970_session_timout_exists.count == 0
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000970
+      - TCAT_AS_001300
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-000970
+      - TCAT-AS-001300
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-001020 | PATCH | LockOutRealms must be used for management of Tomcat."
+        "MEDIUM | TCAT-AS-001030 | PATCH | LockOutRealms failureCount attribute must be set to 5 failed logins for admin users."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: /Server/Service/Engine/Realm
+      attribute: "{{ item.attribute }}"
+      value: "{{ item.value }}"
+      pretty_print: yes
+  with_items:
+      - { attribute: className, value: "org.apache.catalina.realm.LockOutRealm" }
+      - { attribute: failureCount, value: "{{ tcat_lockoutrealm_failurecount }}" }
+      - { attribute: lockOutTime, value: "{{ tcat_lockoutrealm_lockouttime }}" }
+  notify: restart tomcat
+  when:
+      - TCAT_AS_001020
+      - TCAT_AS_001030
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001020
+      - TCAT-AS-001030
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001050 | PATCH | Tomcat user account must be set to nologin."
+  user:
+      name: tomcat
+      shell: /usr/sbin/nologin
+  when:
+      - TCAT_AS_001050
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001050
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001060 | AUDIT | Tomcat user account must be a non-privileged user."
+  block:
+      - name: "MEDIUM | TCAT-AS-001060 | AUDIT | Tomcat user account must be a non-privileged user. | Get User ID value"
+        shell: 'cat /etc/passwd | grep -i tomcat | cut -f3 -d:'
+        changed_when: false
+        failed_when: false
+        register: tcat_001060_uid_value
+
+      - name: "MEDIUM | TCAT-AS-001060 | AUDIT | Tomcat user account must be a non-privileged user. | Warn of elevated UID"
+        debug:
+            msg: "Alert! The tomcat UID ({{ tcat_001060_uid_value.stdout }}) is in the elevated range, please modify to not be in an elevated group"
+        when: tcat_001060_uid_value.stdout < "{{ tcat_non_privileged_uid }}"
+  when:
+      - TCAT_AS_001060
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001060
+      - AUDIT
+
+- name: "MEDIUM | TCAT-AS-001070 | PATCH | $CATALINA_HOME/bin folder permissions must be set to 750."
+  file:
+      path: "{{ catalina_home_dir }}/bin"
+      mode: 0750
+  when:
+      - TCAT_AS_001070
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001070
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001200 | PATCH | $CATALINA_HOME folder must be owned by the root user, group tomcat."
+  file:
+      path: "{{ catalina_home_dir }}/bin"
+      owner: root
+      group: tomcat
+  when:
+      - TCAT_AS_001200
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001200
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001220 | PATCH | $CATALINA_HOME/conf/ folder must be a owned by root,  group tomcat."
+  file:
+      path: "{{ catalina_home_dir }}/conf"
+      owner: root
+      group: tomcat
+  when:
+      - TCAT_AS_001220
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001220
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001230 | PATCH | $CATALINA_HOME/conf folder permissions must be set to 750."
+  file:
+      path: "{{ catalina_home_dir }}/conf"
+      mode: 0750
+  when:
+      - TCAT_AS_001230
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001230
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001240 | PATCH | Files in the $CATALINA_HOME/conf/ folder must have their permissions set to 640."
+  block:
+      - name: "MEDIUM | TCAT-AS-001240 | AUDIT | Files in the $CATALINA_HOME/conf/ folder must have their permissions set to 640. |  Get files list"
+        command: ls {{ catalina_home_dir }}/conf
+        changed_when: false
+        failed_when: false
+        register: tcat_001240_conf_files_list
+
+      - name: "MEDIUM | TCAT-AS-001240 | PATCH | Files in the $CATALINA_HOME/conf/ folder must have their permissions set to 640. | Set permissions"
+        file:
+            path: "{{ catalina_home_dir }}/conf/{{ item }}"
+            mode: 0640
+        with_items:
+            - "{{ tcat_001240_conf_files_list.stdout_lines }}"
+  when:
+      - TCAT_AS_001240
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001240
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001250 | PATCH | $CATALINA_HOME/logs/ folder must be owned by tomcat user, group tomcat."
+  file:
+      path: "{{ catalina_home_dir }}/logs"
+      owner: tomcat
+      group: tomcat
+  when:
+      - TCAT_AS_001250
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001250
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001280 | PATCH | $CATALINA_HOME/work/ folder must be owned by tomcat user, group tomcat."
+  file:
+      path: "{{ catalina_home_dir }}/work"
+      owner: tomcat
+      group: tomcat
+  when:
+      - TCAT_AS_001280
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001280
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-001290 | PATCH | AccessLogValve must be configured for Catalina engine."
+        "MEDIUM | TCAT-AS-001560 | PATCH | AccessLogValve must be configured for Catalina engine."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: /Server/Service/Engine/Valve
+      attribute: "{{ item.attribute }}"
+      value: "{{ item.value }}"
+      pretty_print: yes
+  with_items:
+      - { attribute: calssName, value: "org.apache.catalina.valves.AccessLogValve" }
+      - { attribute: directory, value: "logs" }
+      - { attribute: prefix, value: "{{ tcat_access_log_valve.prefix }}" }
+      - { attribute: suffix, value: "{{ tcat_access_log_valve.suffix }}" }
+      - { attribute: pattern, value: "{{ tcat_access_log_valve.pattern }}" }
+  notify: restart tomcat
+  when:
+      - TCAT_AS_001290
+      - TCAT_AS_001560
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001290
+      - TCAT-AS-001560
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-001320 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface."
+        "MEDIUM | TCAT-AS-001330 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface."
+        "MEDIUM | TCAT-AS-001380 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface."
+        "MEDIUM | TCAT-AS-001390 | PATCH | Multifactor certificate-based tokens (CAC) must be used when accessing the management interface."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-001320 | AUDIT | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Check for settings"
+              "MEDIUM | TCAT-AS-001330 | AUDIT | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Check for settings"
+              "MEDIUM | TCAT-AS-001380 | AUDIT | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Check for settings"
+              "MEDIUM | TCAT-AS-001390 | AUDIT | Multifactor certificate-based tokens (CAC) must be used when accessing the management interface. | Check for settings"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/manager/WEB-INF/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: /x:web-app/x:login-config/x:auth-method
+            count: yes
+        register: tcat_001320_auth_method_exist
+
+      - name: |
+              "MEDIUM | TCAT-AS-001320 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Create auth-method if doesn't exist"
+              "MEDIUM | TCAT-AS-001330 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Create auth-method if doesn't exist"
+              "MEDIUM | TCAT-AS-001380 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Create auth-method if doesn't exist"
+              "MEDIUM | TCAT-AS-001390 | PATCH | Multifactor certificate-based tokens (CAC) must be used when accessing the management interface. | Create auth-method if doesn't exist"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/manager/WEB-INF/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: /x:web-app/x:login-config
+            pretty_print: yes
+            add_children:
+                - auth-method: CLIENT-CERT
+        notify: restart tomcat
+        when: tcat_001320_auth_method_exist.count == 0
+
+      - name: |
+              "MEDIUM | TCAT-AS-001320 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Set auth-method to CLIENT-CERT"
+              "MEDIUM | TCAT-AS-001330 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Set auth-method to CLIENT-CERT"
+              "MEDIUM | TCAT-AS-001380 | PATCH | Multi factor certificate-based tokens (CAC) must be used when accessing the management interface. | Set auth-method to CLIENT-CERT"
+              "MEDIUM | TCAT-AS-001390 | PATCH | Multifactor certificate-based tokens (CAC) must be used when accessing the management interface. | Set auth-method to CLIENT-CERT"
+        xml:
+            path: "{{ catalina_home_dir }}/webapps/manager/WEB-INF/web.xml"
+            namespaces:
+                x: http://xmlns.jcp.org/xml/ns/javaee
+                y: http://www.w3.org/2001/XMLSchema-instance
+            xpath: /x:web-app/x:login-config/x:auth-method
+            value: CLIENT-CERT
+            pretty_print: yes
+        notify: restart tomcat
+        when: tcat_001320_auth_method_exist.count >0
+  when:
+      - TCAT_AS_001320
+      - TCAT_AS_001330
+      - TCAT_AS_001380
+      - TCAT_AS_001390
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001320
+      - TCAT-AS-001330
+      - TCAT-AS-001380
+      - TCAT-AS-001390
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001430 | PATCH | Certificates in the trust store must be issued/signed by an approved CA."
+  command: /bin/true
+  changed_when: false
+  failed_when: false
+  when:
+      - TCAT_AS_001430
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001430
+      - patch
+      - notimplemented
+
+- name: "MEDIUM | TCAT-AS-001460 | PATCH | The application server, when categorized as a high availability system within RMF, must be in a high-availability (HA) cluster."
+  block:
+      - name: "MEDIUM | TCAT-AS-001460 | AUDIT | The application server, when categorized as a high availability system within RMF, must be in a high-availability (HA) cluster. | Is Clustering enabled"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Cluster
+            count: yes
+        failed_when: false
+        register: tcat_001460_clustering_exists
+
+      - name: "MEDIUM | TCAT-AS-001460 | AUDIT | The application server, when categorized as a high availability system within RMF, must be in a high-availability (HA) cluster. | Get Cluster settings"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Cluster
+            content: attribute
+        register: tcat_001460_clustering_settings
+        when: tcat_001460_clustering_exists.count >0
+
+      - name: "MEDIUM | TCAT-AS-001460 | PATCH | The application server, when categorized as a high availability system within RMF, must be in a high-availability (HA) cluster. | Create Cluster settings"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Cluster
+            attribute: className
+            value: "org.apache.catalina.ha.tcp.SimpleTcpCluster"
+        notify: restart tomcat
+        when:
+            - tcat_001460_clustering_exists.count == 0
+            - tcat_clustering_enabled
+
+      - name: "MEDIUM | TCAT-AS-001460 | AUDIT | The application server, when categorized as a high availability system within RMF, must be in a high-availability (HA) cluster. | Display Cluster settings"
+        debug:
+            msg:
+                - "Warning! You have clustering enabled, please review settings for accuracy."
+                - "{{ tcat_001460_clustering_settings.matches }}"
+        when: tcat_001460_clustering_exists.count >0
+  when:
+      - TCAT_AS_001460
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001460
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001480 | PATCH | TLS 1.2 must be used on secured connectors."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: /Server/Service//Connector[contains(translate(@protocol, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'),'http')]
+      attribute: SSLEnabledProtocols
+      value: TLS1.2
+  notify: restart tomcat
+  when:
+      - TCAT_AS_001480
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001480
+      - patch
+
+- name: |
+        "MEDIUM | TCAT-AS-001570 | PATCH | AccessLogValve must be configured for Catalina engine."
+        "MEDIUM | TCAT-AS-001580 | PATCH | AccessLogValve must be configured per each virtual host."
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-001570 | AUDIT | AccessLogValve must be configured for Catalina engine. | Find hosts"
+              "MEDIUM | TCAT-AS-001580 | AUDIT | AccessLogValve must be configured per each virtual host. | Find hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine//Host
+            content: attribute
+        register: tcat_001570_host_name_values
+
+      - name: |
+              "MEDIUM | TCAT-AS-001570 | PATCH | AccessLogValve must be configured for Catalina engine. | Set AccessLogValve to hosts"
+              "MEDIUM | TCAT-AS-001580 | PATCH | AccessLogValve must be configured per each virtual host. | Set AccessLogValve to hosts"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: //Host[@name='{{ item[0].Host.name }}']/Valve
+            attribute: "{{ item[1].attribute }}"
+            value: "{{ item[1].value }}"
+            pretty_print: yes
+        with_nested:
+            - "{{ tcat_001570_host_name_values.matches }}"
+            - "{{ tcat_big_access_log_valve }}"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_001570
+      - TCAT_AS_001580
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001570
+      - TCAT-AS-001580
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001590 | PATCH | Changes to $CATALINA_HOME/bin/ folder must be logged."
+  command: auditctl  -w {{ catalina_home_dir }}/bin -p wa -k tomcat
+  register: tcat_001590_bin_logging
+  failed_when: "'FAILED' in tcat_001590_bin_logging.stderr"
+  changed_when: tcat_001590_bin_logging.rc == 0
+  when:
+      - TCAT_AS_001590
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001590
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001592 | PATCH | Changes to $CATALINA_HOME/conf/ folder must be logged."
+  command: auditctl  -w {{ catalina_home_dir }}/conf -p wa -k tomcat
+  register: tcat_001592_conf_logging
+  changed_when: tcat_001592_conf_logging.rc == 0
+  failed_when: "'FAILED' in tcat_001592_conf_logging.stderr"
+  when:
+      - TCAT_AS_001592
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001592
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001594 | PATCH | Changes to $CATALINA_HOME/lib/ folder must be logged."
+  command: auditctl  -w {{ catalina_home_dir }}/lib -p wa -k tomcat
+  register: tcat_001594_lib_logging
+  changed_when: tcat_001594_lib_logging.rc == 0
+  failed_when: "'FAILED' in tcat_001594_lib_logging.stderr"
+  when:
+      - TCAT_AS_001594
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001594
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001596 | PATCH | AccessLogValve must be configured for Catalina engine."
+  xml:
+      path: "{{ catalina_home_dir }}/conf/server.xml"
+      xpath: //Engine/Valve
+      attribute: "{{ item.attribute }}"
+      value: "{{ item.value }}"
+      pretty_print: yes
+  notify: restart tomcat
+  with_items:
+      - "{{ tcat_big_access_log_valve }}"
+  when:
+      - TCAT_AS_001596
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001596
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001680 | PATCH | ALLOW_BACKSLASH must be set to false."
+  lineinfile:
+      path: "{{ catalina_home_dir }}/conf/catalina.properties"
+      regexp: '^org.apache.catalina.connector.ALLOW_BACKSLASH='
+      line: 'org.apache.catalina.connector.ALLOW_BACKSLASH=false'
+  notify: restart tomcat
+  when:
+      - TCAT_AS_001680
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001680
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001690 | PATCH | ENFORCE_ENCODING_IN_GET_WRITER must be set to true."
+  block:
+      - name: "MEDIUM | TCAT-AS-001690 | AUDIT | ENFORCE_ENCODING_IN_GET_WRITER must be set to true. | Get CATALINA_OPTS config value"
+        shell: cat /etc/systemd/system/tomcat.service | grep -i CATALINA_OPTS | sed 's/.$//'
+        changed_when: false
+        failed_when: false
+        register: tcat_001690_catalina_ops
+
+      - name: "MEDIUM | TCAT-AS-001690 | PATCH | ENFORCE_ENCODING_IN_GET_WRITER must be set to true. | Add ENFORCE_ENCODING_IN_GET_WRITER if missing"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: "^Environment='CATALINA_OPTS=.*"
+            replace: "{{ tcat_001690_catalina_ops.stdout }} -Dorg.apache.catalina.connector.response.ENFORCE_ENCODING_IN_GET_WRITER=true'"
+        when: "'ENFORCE_ENCODING_IN_GET_WRITER=true' not in tcat_001690_catalina_ops.stdout"
+        notify: restart tomcat
+  when:
+      - TCAT_AS_001690
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001690
+      - patch
+
+- name: "MEDIUM | TCAT-AS-001700 | PATCH | Tomcat users in a management role must be approved by the ISSO."
+  block:
+      - name: "MEDIUM | TCAT-AS-001700 | AUDIT | Tomcat users in a management role must be approved by the ISSO. | Get available users"
+        shell: 'cat /etc/passwd | cut -f1 -d:'
+        changed_when: false
+        failed_when: false
+        register: tcat_001700_users
+
+      - name: "MEDIUM | TCAT-AS-001700 | PATCH | Tomcat users in a management role must be approved by the ISSO. | Display available users"
+        debug:
+            msg:
+                - "Alert! Here are the list of available users that need to be approved by the ISSO"
+                - "{{ tcat_001700_users.stdout_lines }}"
+  when:
+      - TCAT_AS_001700
+  tags:
+      - cat2
+      - medium
+      - TCAT-AS-001700
+      - patch

@@ -1,0 +1,104 @@
+---
+- name: |
+        "HIGH | TCAT-AS-000060 | AUDIT | Default password for keystore must be changed."
+        "HIGH | TCAT-AS-000720 | AUDIT | Default password for keystore must be changed."
+  shell: keytool -storepasswd -new {{ tcat_default_storepass }} -storepass "changeit"
+  changed_when: "'password was incorrect' not in tcat_000060_storepass.stdout"
+  failed_when: false
+  ignore_errors: yes
+  register: tcat_000060_storepass
+  when:
+      - TCAT_AS_000060
+      - TCAT_AS_000720
+  tags:
+      - cat1
+      - high
+      - TCAT-AS-000060
+      - TCAT-AS-000720
+      - patch
+
+- name: "HIGH | TCAT-AS-000630 | PATCH | SSL must be enabled on JMX."
+  block:
+      - name: "HIGH | TCAT-AS-000630 | AUDIT | SSL must be enabled on JMX. | Find if jmxremote is enabled"
+        command: grep -i jmxremote /etc/systemd/system/tomcat.service
+        register: tcat_000630_jmx_enabled
+        changed_when: false
+        failed_when: false
+
+      - name: "HIGH | TCAT-AS-000630 | AUDIT | SSL must be enabled on JMX. | Message if jmxremote is not used"
+        debug:
+            msg:
+                - "You are not using jmxremote management, this control is not applicable"
+        when: tcat_000630_jmx_enabled.stdout == ""
+
+      - name: "HIGH | TCAT-AS-000630 | PATCH | SSL must be enabled on JMX. | replace settings"
+        replace:
+            path: /etc/systemd/system/tomcat.service
+            regexp: "{{ item.regexp }}"
+            replace: "{{ item.replace }}"
+        with_items:
+            - { regexp: '-Dcom.sun.management.jmxremote.ssl=false', replace: '-Dcom.sun.management.jmxremote.ssl=true' }
+            - { regexp: '-Dcom.sun.management.jmxremote.authenticate=false', replace: '-Dcom.sun.management.jmxremote.authenticate=true' }
+        when: "'jmxremote' in tcat_000630_jmx_enabled.stdout"
+        notify: restart tomcat
+
+  when:
+      - TCAT_AS_000630
+  tags:
+      - cat1
+      - high
+      - TCAT-AS-000630
+      - patch
+
+- name: "HIGH | TCAT-AS-000690 | PATCH | LDAP authentication must be secured."
+  block:
+      - name: "HIGH | TCAT-AS-000690 | PATCH | LDAP authentication must be secured. | Create JNDIRealm node"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Realm/Realm[@className='org.apache.catalina.realm.JNDIRealm']
+            pretty_print: yes
+        notify: restart tomcat
+
+      - name: "HIGH | TCAT-AS-000690 | PATCH | LDAP authentication must be secured. | Add attributes to JNDIRealm"
+        xml:
+            path: "{{ catalina_home_dir }}/conf/server.xml"
+            xpath: /Server/Service/Engine/Realm/Realm[@className='org.apache.catalina.realm.JNDIRealm']
+            attribute: "{{ item.attribute }}"
+            value: "{{ item.value }}"
+            pretty_print: yes
+        with_items:
+            - { attribute: connectionURL, value: "{{ tcat_realm_settings.connection_url }}" }
+            - { attribute: userPattern, value: "{{ tcat_realm_settings.user_pattern }}" }
+            - { attribute: roleBase, value: "{{ tcat_realm_settings.role_base }}" }
+            - { attribute: roleName, value: "{{ tcat_realm_settings.role_name }}" }
+            - { attribute: roleSearch, value: "{{ tcat_realm_settings.role_search }}" }
+        notify: restart tomcat
+  when:
+      - TCAT_AS_000690
+  tags:
+      - cat1
+      - high
+      - TCAT-AS-000690
+      - patch
+
+- name: |
+        "HIGH | TCAT-AS-000750 | PATCH | Tomcat must use FIPS-validated ciphers on secured connectors."
+        "HIGH | TCAT-AS-001440 | PATCH | Secured connectors must use FIPS 140-2-validated cipher algorithms."
+        "HIGH | TCAT-AS-001450 | PATCH | Secured connectors must use FIPS 140-2-validated cipher algorithms."
+        "HIGH | TCAT-AS-001490 | PATCH | Secured connectors must use FIPS 140-2-validated cipher algorithms."
+        "HIGH | TCAT-AS-001500 | PATCH | Secured connectors must use FIPS 140-2-validated cipher algorithms."
+  xml:
+    path: "{{ catalina_home_dir }}/conf/server.xml"
+    xpath: //Listener[@className='org.apache.catalina.core.AprLifecycleListener']
+    attribute: FIPSMode
+    value: "on"
+  notify: restart tomcat
+  when:
+      - TCAT_AS_000750
+      - TCAT_AS_001440
+  tags:
+      - cat1
+      - high
+      - TCAT-AS-000750
+      - TCAT-AS-001440
+      - patch

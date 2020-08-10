@@ -1,0 +1,245 @@
+---
+# defaults file for tomcat-stig/
+
+# These settings will enable/disable entire STIG categoriees
+# true=enabled/false=disabled
+tcat_cat1_patch: true
+tcat_cat2_patch: true
+tcat_cat3_patch: true
+
+tcat_skip_for_travis: false
+
+# tweak role to run in a chroot, such as in kickstart %post script
+tcat_system_is_chroot: "{{ ansible_is_chroot | default(False) }}"
+
+# This toggle will install the needed packages for your web server
+# true will install packages and false will skip package install
+tcat_automate_install: true
+
+# There are tasks that ask if you to be on the latest version. This togle will upgrade to the latest packages
+# true will upgrade and false will will NOT upgrade
+tcat_automate_package_upgrades: true
+
+# We've defined disruption-high to indicate items that are likely to cause
+# disruption in a normal workflow.  These items can be remediated automatically
+# but are disabled by default to avoid disruption.
+# ture = will run disruptive tasks, false = skip disruptive tasks
+tcat_disruption_high: true
+
+# There are tasks that need a referrence to where interactive/non-system user account GUID's start
+# The value below is the GUID start point for interactive/non-system users. Default in linux is 1000
+tcat_non_privileged_uid: 1000
+
+# This is the toggle to use to enable/disable the need for the privilaged attribute in the context.xml
+tcat_privileged_context_need: false
+
+# This is the Variables for the tomcat home path. This is gathered from the tomcat.service config
+catalina_home_dir: "{{ catalina_find_home_dir.stdout }}"
+
+# CAT1 Rules
+TCAT_AS_000060: true
+TCAT_AS_000630: true
+TCAT_AS_000690: false
+TCAT_AS_000720: true
+TCAT_AS_000750: false
+TCAT_AS_001440: false
+TCAT_AS_001450: false
+TCAT_AS_001490: false
+TCAT_AS_001500: false
+
+# CAT2 Rules
+TCAT_AS_000020: true
+TCAT_AS_000040: true
+TCAT_AS_000050: true
+TCAT_AS_000070: true
+TCAT_AS_000080: true
+TCAT_AS_000090: true
+TCAT_AS_000100: true
+TCAT_AS_000110: true
+TCAT_AS_000160: true
+TCAT_AS_000170: true
+TCAT_AS_000180: true
+TCAT_AS_000190: true
+TCAT_AS_000210: true
+TCAT_AS_000220: true
+TCAT_AS_000230: true
+TCAT_AS_000240: true
+TCAT_AS_000250: true
+TCAT_AS_000270: true
+TCAT_AS_000280: true
+TCAT_AS_000290: true
+TCAT_AS_000300: true
+TCAT_AS_000310: true
+TCAT_AS_000360: true
+TCAT_AS_000361: true
+TCAT_AS_000370: true
+TCAT_AS_000371: true
+TCAT_AS_000380: true
+TCAT_AS_000390: true
+TCAT_AS_000400: true
+TCAT_AS_000410: true
+TCAT_AS_000450: true
+TCAT_AS_000470: true
+TCAT_AS_000490: true
+TCAT_AS_000500: true
+TCAT_AS_000530: true
+TCAT_AS_000540: true
+TCAT_AS_000590: true
+TCAT_AS_000600: true
+TCAT_AS_000610: true
+TCAT_AS_000680: true
+TCAT_AS_000700: true
+TCAT_AS_000710: true
+TCAT_AS_000780: true
+TCAT_AS_000790: true
+TCAT_AS_000800: true
+TCAT_AS_000860: true
+TCAT_AS_000920: true
+TCAT_AS_000940: true
+TCAT_AS_000970: true
+TCAT_AS_001020: true
+TCAT_AS_001030: true
+TCAT_AS_001050: true
+TCAT_AS_001060: true
+TCAT_AS_001070: true
+TCAT_AS_001200: true
+TCAT_AS_001220: true
+TCAT_AS_001230: true
+TCAT_AS_001240: true
+TCAT_AS_001250: true
+TCAT_AS_001280: true
+TCAT_AS_001290: true
+TCAT_AS_001300: true
+TCAT_AS_001320: true
+TCAT_AS_001330: true
+TCAT_AS_001380: true
+TCAT_AS_001390: true
+TCAT_AS_001430: true
+TCAT_AS_001460: true
+TCAT_AS_001470: true
+TCAT_AS_001480: true
+TCAT_AS_001550: true
+TCAT_AS_001560: true
+TCAT_AS_001570: true
+TCAT_AS_001580: true
+TCAT_AS_001590: true
+TCAT_AS_001592: true
+TCAT_AS_001594: true
+TCAT_AS_001596: true
+TCAT_AS_001600: true
+TCAT_AS_001610: true
+TCAT_AS_001680: true
+TCAT_AS_001690: true
+TCAT_AS_001700: true
+
+# CAT3 Rules
+TCAT_AS_000010: true
+TCAT_AS_000030: true
+TCAT_AS_000140: true
+TCAT_AS_000260: true
+TCAT_AS_000480: true
+TCAT_AS_000510: true
+TCAT_AS_000520: true
+TCAT_AS_000550: true
+TCAT_AS_000560: true
+TCAT_AS_000570: true
+TCAT_AS_000580: true
+TCAT_AS_000810: true
+TCAT_AS_000820: true
+TCAT_AS_000840: false
+TCAT_AS_000930: true
+TCAT_AS_000950: false
+TCAT_AS_001040: true
+TCAT_AS_001080: true
+TCAT_AS_001260: true
+TCAT_AS_001270: true
+TCAT_AS_001640: true
+TCAT_AS_001660: true
+TCAT_AS_001670: true
+TCAT_AS_001710: true
+TCAT_AS_001720: true
+TCAT_AS_001730: true
+
+# CAT1 Variables
+
+# TCAT-AS-000060/TCAT-AS-000720
+# tcat_default_storepass is the default keystore password. This can be converted to a vault password
+tcat_default_storepass: "password1"
+
+# Control TCAT-AS-000690
+# These settings are for the Realm JNDIRealm settings. Make sure to replace localhost with LDAP server ip
+tcat_jndi_realm:
+    connection_url: "ldaps://localhost:686"
+    user_pattern: "uid={0},ou=people,dc=myunit,dc=mil"
+    role_base: "ou=groups,dc=myunit,dc=mil"
+    role_name: "cn"
+    role_search: "(uniqueMember={0})"
+
+# CAT2 Variables
+
+# Control TCAT-AS-000050, TCAT-AS-001290
+# These are the settings for hte AccessLogValve
+tcat_access_log_valve:
+    prefix: "localhost_access_log"
+    suffix: ".txt"
+    pattern: "%h %l %u %t &quot;%r&quot; %s %b"
+
+# Control TCAT-AS-000170
+# The variable routable_ip_proxy: toggles if your proxy is using a routable IP address or an RFC 1918 Class B address space. If you are set this value to true
+# The variable remoteipvalve_proxy_addresses are the internal proxy addresses if you are using the routable IP or RFC 1918 address space mentioned above
+tcat_routable_ip_proxy: false
+tcat_remoteipvalve_proxy_addresses: "172.16.0.10|172.16.0.11"
+
+# Control TCAT-AS-000600
+# The setting below is to disable the config injection that is not needed if manager and host-manager applications have been removed
+tcat_manager_host_manager_removed: false
+
+# Control TCAT-AS-000780
+# The setting below enables the task if JMXRemote is used and set's the host IP if it is enabled
+# jmx_management: true means you are using JMX management, false means you are not and the IP configured below will not be set.
+tcat_jmx_management: false
+tcat_jmxremote_host: 192.168.0.150
+
+# Control TCAT-AS-000790
+# This setting enables RemoteAddrValve 
+tcat_remote_addr_valve: false
+tcat_remoteaddrvalve_value: 127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1
+
+# Control TCAT-AS-000790
+# This setting enables RemoteCIDRValve
+tcat_remote_cidr_valve: false
+tcat_remotecidrvalve_value: 127.0.0.1, ::1,192.168.1.0/24
+
+# Control TCA-AS-000800
+# This is the list of IP addresses that are used in connectors that are behind proxies
+tcat_connect_proxy_address:
+    - 127.0.0.1
+# Control TCAT-AS-001020
+# These are the values for the Realm Lockout values
+# lockoutrealm_failurecount is the number of failed attempts for lockout
+# lockoutrealm_lockouttime is the duration of the lockout 
+tcat_lockoutrealm_failurecount: "5"
+tcat_lockoutrealm_lockouttime: "600"
+
+# Control TCAT-AS-0001460
+# tcat_clustering_enabled will set the simpleTcpCluster in server.xml
+tcat_clustering_enabled: true
+
+# Control TCAT-AS_001570
+# This is the needed loop for adding the values to all host sections
+tcat_big_access_log_valve:
+    - { attribute: className, value: "org.apache.catalina.valves.AccessLogValve" }
+    - { attribute: directory, value: "logs" }
+    - { attribute: prefix, value: "{{ tcat_access_log_valve.prefix }}" }
+    - { attribute: suffix, value: "{{ tcat_access_log_valve.suffix }}" }
+    - { attribute: pattern, value: "{{ tcat_access_log_valve.pattern }}" }
+
+# CAT3 Variables
+
+# Control TCAT-AS-000010
+# tcat_max_active_sessions is the number of simultanious active sessions allowed.
+tcat_max_active_sessions: "10"
+
+# TCAT-AS-001730
+# tcat_listen_address is the address the network interface the connector will listen on
+tcat_listen_address: "192.168.0.145"
