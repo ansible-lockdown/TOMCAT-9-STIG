@@ -36,6 +36,10 @@ tcat_privileged_context_need: false
 # This is the Variables for the tomcat home path. This is gathered from the tomcat.service config
 catalina_home_dir: "{{ catalina_find_home_dir.stdout }}"
 
+# This will allow the role to install Tomcat 9 before running the role, or just run the role against a host
+# tcat_install set to true will install Tomcat 9 before running, set to false will skip installing tasks
+tcat_install: false
+
 # CAT1 Rules
 TCAT_AS_000060: true
 TCAT_AS_000630: true
