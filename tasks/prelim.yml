@@ -32,7 +32,7 @@
 
       - name: Install Ubuntu based packages
         apt:
-            name: ['python-lxml', 'auditd']
+            name: ['python3-lxml', 'auditd']
             state: present
         when: ansible_facts.distribution_file_variety == "Debian" and ansible_facts.distribution_major_version == "16" or ansible_facts.distribution_major_version == "18" or ansible_facts.distribution_major_version == "20"
 
