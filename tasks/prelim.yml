@@ -22,8 +22,8 @@
             - ansible_distribution == "RedHat"
             - ansible_distribution_major_version == "8"
 
-      - name: Install CENROS based packages
-        dnf:
+      - name: Install CENTOS based packages
+        yum:
             name: ['python-lxml', 'audit']
             state: present
         when:
