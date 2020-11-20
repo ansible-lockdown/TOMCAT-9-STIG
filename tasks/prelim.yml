@@ -4,32 +4,49 @@
   changed_when: false
   register: catalina_find_home_dir
 
-- debug: var=ansible_facts
 - name: Install needed packages
   block:
       - name: Install RHEL7 based packages
         yum:
-            name: "{{ item }}"
+            name: ['python-lxml', 'auditd']
             state: present
-        with_items:
-            - python-lxml
-            - auditd
         when: ansible_facts.distribution_file_variety == "RedHat" and ansible_facts.distribution_major_version == "7"
 
       - name: Install RHEL8 based packages
         dnf:
-            name: "{{ item }}"
+            name: ['python3-lxml', 'audit']
             state: present
-        with_items:
-            - python3-lxml
-            - auditd
         when: ansible_facts.distribution_file_variety == "RedHat" and ansible_facts.distribution_major_version == "8"
 
       - name: Install Ubuntu based packages
         apt:
-            name: "{{ item }}"
+            name: ['python-lxml', 'auditd']
             state: present
-        with_items:
-            - python-lxml
-            - auditd
-        when: ansible_facts.distribution_file_variety == "Debian" and ansible_facts.distribution_major_version == "16"
+        when: ansible_facts.distribution_file_variety == "Debian" and ansible_facts.distribution_major_version == "16" or ansible_facts.distribution_major_version == "18" or ansible_facts.distribution_major_version == "20"
+
+
+- name: Install RHEL 7 Tomcat 9
+  yum:
+      name: tomcat
+      state: present
+  when: ansible_distribution_file_variety == "RedHat" and ansible_distribution_major_version == "7" or  ansible_distribution_major_version == "8"
+
+- name: Install Ubuntu 18 and 20 Tomcat 9
+  block:
+      - name: Prep for Tomcat | Update apt
+        apt:
+            update_cache: yes
+
+      - name: Prep For Tomcat | Upgrade software
+        apt:
+            name: "*"
+            state: latest
+
+      - name: Install Ubuntu Tomcat 9
+        apt:
+            name: tomcat9
+            state: present
+  when: 
+      - ansible_distribution_file_variety == "Debian"
+      - ansible_distribution_major_version == "18" or 
+        ansible_distribution_major_version == "20"

@@ -2,9 +2,25 @@
 - name: |
         "MEDIUM | TCAT-AS-001470 | PATCH | Tomcat server must be patched for security vulnerabilities."
         "MEDIUM | TCAT-AS-001550 | PATCH | Tomcat server must be patched for security vulnerabilities."
-  yum:
-      name: tomcat
-      state: present
+  block:
+      - name: |
+              "MEDIUM | TCAT-AS-001470 | PATCH | Tomcat server must be patched for security vulnerabilities. | Find Tomcat version"
+              "MEDIUM | TCAT-AS-001550 | PATCH | Tomcat server must be patched for security vulnerabilities. | Find Tomcat version"
+        shell: cat {{ catalina_home_dir }}/RELEASE-NOTES | grep "Aapche Tomcat Version" | sed 's/^[ \t]*//;s/[ \t]*$//'
+        # shell: "grep "Apache Tomcat Version" {{ catalina_home_dir }}/RELEASE-NOTES | sed 's/^[ \t]*//;s/[ \t]*$//"
+        changed_when: false
+        failed_when: false
+        register: tcat_001470_tomcat_version
+
+      - name: |
+              "MEDIUM | TCAT-AS-001470 | PATCH | Tomcat server must be patched for security vulnerabilities. | Alert Tomcat version"
+              "MEDIUM | TCAT-AS-001550 | PATCH | Tomcat server must be patched for security vulnerabilities. | Alert Tomcat version"
+        debug:
+            msg:
+                - "Alert!! Below is the currnetly installed version of Tomcat."
+                - "Please review to confirm this is the most currnet available"
+                - "{{ tcat_001470_tomcat_version.stdout }}"
+
   when:
       - tcat_automate_package_upgrades
       - TCAT_AS_001470
@@ -285,7 +301,7 @@
         "MEDIUM | TCAT-AS-000220 | PATCH | AccessLogValve must be configured per each virtual host."
         "MEDIUM | TCAT-AS-000230 | PATCH | AccessLogValve must be configured for Catalina engine."
         "MEDIUM | TCAT-AS-000280 | PATCH | AccessLogValve must be configured for each application context."
-        "MEDIUM | TCAT-AS-000290 | PATCH | AccessLogValve must be configured per each virtual host.
+        "MEDIUM | TCAT-AS-000290 | PATCH | AccessLogValve must be configured per each virtual host."
         "MEDIUM | TCAT-AS-000300 | PATCH | AccessLogValve must be configured for Catalina engine."
         "MEDIUM | TCAT-AS-000310 | PATCH | AccessLogValve must be configured for Catalina engine."
         "MEDIUM | TCAT-AS-001570 | PATCH | AccessLogValve must be configured for Catalina engine."
@@ -699,7 +715,7 @@
             xpath: /Context
             attribute: privileged
             value: "false"
-        when: not tcat_privilaged_context_need
+        when: not tcat_privileged_context_need
 
       - name: "MEDIUM | TCAT-AS-000590 | PATCH | Applications in privileged mode must be approved by the ISSO. | Set privileged in webapps"
         xml:
@@ -708,7 +724,7 @@
             attribute: privileged
             value: "false"
             pretty_print: yes
-        when: not tcat_privilaged_context_need
+        when: not tcat_privileged_context_need
         with_items:
             - "{{ tcat_000590_webapps_contextxml.files }}"
   when:
