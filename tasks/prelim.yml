@@ -10,13 +10,25 @@
         yum:
             name: ['python-lxml', 'auditd']
             state: present
-        when: ansible_facts.distribution_file_variety == "RedHat" and ansible_facts.distribution_major_version == "7"
+        when:
+            - ansible_distribution == "RedHat"
+            - ansible_distribution_major_version == "7"
 
       - name: Install RHEL8 based packages
         dnf:
             name: ['python3-lxml', 'audit']
             state: present
-        when: ansible_facts.distribution_file_variety == "RedHat" and ansible_facts.distribution_major_version == "8"
+        when:
+            - ansible_distribution == "RedHat"
+            - ansible_distribution_major_version == "8"
+
+      - name: Install CENROS based packages
+        dnf:
+            name: ['python-lxml', 'audit']
+            state: present
+        when:
+            - ansible_distribution == "CentOS"
+            # - ansible_distribution_major_version == "8"
 
       - name: Install Ubuntu based packages
         apt:
