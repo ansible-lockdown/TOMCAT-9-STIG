@@ -1103,7 +1103,7 @@
       - name: "MEDIUM | TCAT-AS-001060 | AUDIT | Tomcat user account must be a non-privileged user. | Warn of elevated UID"
         debug:
             msg: "Alert! The tomcat UID ({{ tcat_001060_uid_value.stdout }}) is in the elevated range, please modify to not be in an elevated group"
-        when: tcat_001060_uid_value.stdout < "{{ tcat_non_privileged_uid }}"
+        when: tcat_001060_uid_value.stdout < tcat_non_privileged_uid
   when:
       - TCAT_AS_001060
   tags:
