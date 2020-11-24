@@ -24,7 +24,7 @@
 
       - name: Install CENTOS based packages
         yum:
-            name: ['python-lxml', 'audit']
+            name: ['python3-lxml', 'audit']
             state: present
         when:
             - ansible_distribution == "CentOS"
@@ -37,33 +37,38 @@
         when: ansible_facts.distribution_file_variety == "Debian" and ansible_facts.distribution_major_version == "16" or ansible_facts.distribution_major_version == "18" or ansible_facts.distribution_major_version == "20"
 
 
-- name: Install RHEL 7 Tomcat 9
-  yum:
-      name: tomcat
-      state: present
-  when: 
-      - tcat_install
-      - ansible_distribution_file_variety == "RedHat"
-      - ansible_distribution_major_version == "7" or
-        ansible_distribution_major_version == "8"
+# - name: Install RHEL 7 Tomcat 9
+#   yum:
+#       name: tomcat
+#       state: present
+#   when: 
+#       - tcat_install
+#       - ansible_distribution_file_variety == "RedHat"
+#       - ansible_distribution_major_version == "7" or
+#         ansible_distribution_major_version == "8"
 
-- name: Install Ubuntu 18 and 20 Tomcat 9
-  block:
-      - name: Prep for Tomcat | Update apt
-        apt:
-            update_cache: yes
+# - name: Install Ubuntu 18 and 20 Tomcat 9
+#   block:
+#       - name: Prep for Tomcat | Update apt
+#         apt:
+#             update_cache: yes
 
-      - name: Prep For Tomcat | Upgrade software
-        apt:
-            name: "*"
-            state: latest
+#       - name: Prep For Tomcat | Upgrade software
+#         apt:
+#             name: "*"
+#             state: latest
 
-      - name: Install Ubuntu Tomcat 9
-        apt:
-            name: tomcat9
-            state: present
-  when: 
-      - tcat_install
-      - ansible_distribution_file_variety == "Debian"
-      - ansible_distribution_major_version == "18" or 
-        ansible_distribution_major_version == "20"
+#       - name: Install Ubuntu Tomcat 9
+#         apt:
+#             name: tomcat9
+#             state: present
+#   when: 
+#       - tcat_install
+#       - ansible_distribution_file_variety == "Debian"
+#       - ansible_distribution_major_version == "18" or 
+#         ansible_distribution_major_version == "20"
+
+- name: Install Tomcat
+  include_tasks: install_tomcat.yml
+  when:
+    - tcat_install

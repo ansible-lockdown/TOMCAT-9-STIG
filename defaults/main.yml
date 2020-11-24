@@ -38,7 +38,7 @@ catalina_home_dir: "{{ catalina_find_home_dir.stdout }}"
 
 # This will allow the role to install Tomcat 9 before running the role, or just run the role against a host
 # tcat_install set to true will install Tomcat 9 before running, set to false will skip installing tasks
-tcat_install: false
+tcat_install: true
 
 # CAT1 Rules
 TCAT_AS_000060: true
@@ -163,6 +163,44 @@ TCAT_AS_001670: true
 TCAT_AS_001710: true
 TCAT_AS_001720: true
 TCAT_AS_001730: true
+
+# Install Tomcat Variables
+# Below are the variables needed to install Tomcat via automation
+# Java is required for Tomcat 
+
+java_version: 'jdk-11.0.5+10'
+java_install_dir: '/opt/java'
+tomcat_java_home_rh: "/usr/lib/jvm/jre"
+tomcat_java_home_ub: "/usr/lib/jvm/java-8-openjdk-amd64/jre"
+tomcat_redis_filename: apache-tomcat-9.0.40.tar.gz
+tomcat_user: tomcat
+tomcat_group: tomcat
+
+tomcat_archive_name: "apache-tomcat-9.0.40"
+tomcat_archive_name_ext: ".tar.gz"
+tomcat_archive_url: "https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.40/bin/"
+tomcat_home_path: "/opt/tomcat"
+tomcat_archive_install_path: "{{tomcat_home_path}}/{{tomcat_archive_name}}"
+tomcat_install_link: "{{tomcat_home_path}}/current"
+tomcat_roles:
+  - manager-gui
+  - manager-script
+  - manager-jmx
+  - manager-status
+tomcat_users: []
+
+# Directory to store files downloaded for Java installation on the remote box
+tomcat_download_dir: "{{ x_ansible_download_dir | default(ansible_env.HOME + '/.ansible/tmp/downloads') }}"
+
+# Location Tomcat installations packages can be found on the local box
+# local packages will be uses in preference to downloading new packages.
+tomcat_local_archive_dir: '{{ playbook_dir }}/files'
+
+# Wether to use installation packages in the local archive (if available)
+tomcat_use_local_archive: false
+
+# # File name for the Tomcat redistributable installation file
+# tomcat_redis_filename: apache-tomcat-8.5.54.tar.gz
 
 # CAT1 Variables
 

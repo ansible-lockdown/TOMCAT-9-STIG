@@ -1,0 +1,29 @@
+[Unit]
+Description=Apache Tomcat Web Application Container
+After=network.target
+
+[Service]
+Type=forking
+{% if ansible_distribution_file_variety == "Debian" -%}
+Environment=JAVA_HOME={{tomcat_java_home_ub}}
+{% endif %}
+{% if ansible_distribution_file_variety == "RedHat" -%}
+Environment=JAVA_HOME={{tomcat_java_home_rh}}
+{% endif %}
+Environment=CATALINA_PID=/opt/tomcat/current/temp/tomcat.pid
+Environment=CATALINA_HOME=/opt/tomcat/current
+Environment=CATALINA_BASE=/opt/tomcat/current
+Environment='CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC'
+Environment='JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom'
+
+ExecStart=/opt/tomcat/current/bin/startup.sh
+ExecStop=/opt/tomcat/current/bin/shutdown.sh
+
+User=tomcat
+Group=tomcat
+UMask=0027
+RestartSec=10
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
