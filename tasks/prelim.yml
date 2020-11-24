@@ -24,7 +24,7 @@
 
       - name: Install CENTOS based packages
         yum:
-            name: ['python3-lxml', 'audit']
+            name: ['python2-lxml', 'audit']
             state: present
         when:
             - ansible_distribution == "CentOS"
