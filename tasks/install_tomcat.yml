@@ -1,0 +1,164 @@
+---
+- name: Ensure tomcat_java_home is defined
+  fail: msg="You must define the tomcat_java_home variable"
+  when: tomcat_java_home_rh is not defined or tomcat_java_home_ub is not defined
+
+- name: Update packages
+  block:
+      - name: Update RHEL packages
+        yum:
+            name: '*'
+            state: latest
+        when: ansible_distribution_file_variety == "RedHat"
+
+
+      - name: Update Ubuntu cache
+        apt:
+          update_cache: yes
+        when: ansible_distribution == "Ubuntu"
+
+      - name: Upgrade Ubuntu packages
+        apt:
+          name: "*"
+          state: latest
+        when: ansible_distribution == "Ubuntu"
+
+- name: Create tomcat group
+  group:
+    name: "{{ tomcat_group }}"
+    system: true
+
+- name: Create tomcat user
+  user:
+    name: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    shell: /bin/false
+    home: "{{ tomcat_home_path }}"
+    system: true
+    createhome: true
+    move_home: true
+
+- name: Install Java
+  block:
+      - name: Install Java - RHEL
+        yum:
+            name: java-1.8.0-openjdk
+            state: present
+        when: ansible_distribution_file_variety == "RedHat"
+
+      - name: install Java - Ubuntu
+        apt:
+            name: openjdk-8-jdk
+            state: present
+        when: ansible_distribution == "Ubuntu"
+
+- name: Check for tomcat on remote box
+  stat:
+    path: '{{ tomcat_download_dir }}/{{ tomcat_redis_filename }}'
+  register: remote_tomcat_file
+  ignore_errors: yes
+
+- name: Download and extract Tomcat to tomcat home directory
+  unarchive:
+    src: "{{ tomcat_archive_url }}/{{ tomcat_archive_name }}{{ tomcat_archive_name_ext }}"
+    dest: "{{ tomcat_home_path }}"
+    remote_src: true
+    group: "{{ tomcat_group }}"
+    creates: "{{ tomcat_archive_install_path }}"
+  when: not remote_tomcat_file.stat.exists
+
+- name: Extract local Tomcat to tomcat home directory
+  unarchive:
+    src: "{{ tomcat_download_dir }}/{{ tomcat_redis_filename }}"
+    dest: "{{ tomcat_home_path }}"
+    remote_src: true
+    group: "{{ tomcat_group }}"
+    creates: "{{ tomcat_archive_install_path }}"
+  when: remote_tomcat_file.stat.exists
+
+- name: Make the tomcat user the owner of the webapps, work, temp, and logs directories
+  file:
+    path: "{{ tomcat_archive_install_path }}/{{ item }}"
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    recurse: true
+  with_items:
+    - webapps
+    - work
+    - temp
+    - logs
+
+- name: Grant Tomcat group read access to the conf directory
+  file:
+    path: "{{ tomcat_archive_install_path }}/conf"
+    state: directory
+    # mode: 'u=rwx,g=rwx,o=rwx'
+    mode: "g+r"
+    recurse: true
+
+- name: Grant Tomcat group execute access to the conf directory itself
+  file:
+    path: "{{ tomcat_archive_install_path }}/conf"
+    state: directory
+    # mode: 'u=rwx,g=rwx,o=rwx'
+    mode: "g+x"
+
+- name: Create tomcat-users.xml
+  template:
+    src: tomcat-users.xml.j2
+    dest: "{{ tomcat_archive_install_path }}/conf/tomcat-users.xml"
+  notify: restart tomcat
+
+- name: Symlink Tomcat to current version
+  file:
+    src: "{{ tomcat_archive_install_path }}"
+    dest: "{{ tomcat_install_link }}"
+    state: link
+  notify: restart tomcat
+
+- name: Create systemd service script for Tomcat
+  template:
+    src: tomcat.service.j2
+    dest: /etc/systemd/system/tomcat.service
+  notify: restart tomcat
+
+- name: Start and enable Tomcat service
+  systemd:
+    name: tomcat
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Copy Local Tomcat
+  block:
+    - name: check for Tomcat on local box
+      stat:
+        path: '{{ tomcat_local_archive_dir }}/{{ tomcat_redis_filename }}'
+      delegate_to: localhost
+      register: tomcat_local_file
+      ignore_errors: yes
+      become: no
+      when: tomcat_use_local_archive
+
+    - name: create download directory
+      file:
+        state: directory
+        mode: 'u=rwx,go=rx'
+        dest: '{{ tomcat_download_dir }}'
+      when: tomcat_use_local_archive
+
+    - name: copy Tomcat from local box
+      copy:
+        src: '{{ tomcat_local_archive_dir }}/{{ tomcat_redis_filename }}'
+        dest: '{{ tomcat_download_dir }}/{{ tomcat_redis_filename }}'
+        mode: 'u=rw,go=r'
+      when: tomcat_use_local_archive and tomcat_local_file.stat.exists
+  when:
+    - tomcat_use_local_archive
+    - tomcat_redis_filename not in (None, '', omit)
+
+# Set home path from service file.
+- name: Find $CATALINA_HOME directory
+  shell: cat /etc/systemd/system/tomcat.service | grep "CATALINA_HOME" | cut -f3 -d= | tr -d '"'
+  changed_when: false
+  register: catalina_find_home_dir
