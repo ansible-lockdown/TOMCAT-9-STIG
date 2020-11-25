@@ -11,7 +11,15 @@
             name: ['python-lxml', 'auditd']
             state: present
         when:
-            - ansible_distribution_file_variety == "RedHat"
+            - ansible_distribution == "RedHat"
+            - ansible_distribution_major_version == "7"
+
+      - name: Install CentOS7 based packages
+        yum:
+            name: ['python-lxml', 'audit']
+            state: present
+        when:
+            - ansible_distribution == "CentOS"
             - ansible_distribution_major_version == "7"
 
       - name: Install RHEL8 based packages
